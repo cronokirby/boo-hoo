@@ -2,7 +2,18 @@
 ///
 /// Each of these manipulates the program stack, potentially reading input.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Operation {}
+enum Operation {
+    /// PUSH(!POP)
+    Not,
+    /// PUSH(POP & POP)
+    And,
+    /// PUSH(POP ^ POP)
+    Xor,
+    /// Push an argument bit, with the right index.
+    PushArg(usize),
+    /// Push a local element, indexed from the bottom of the stack
+    PushLocal(usize)
+}
 
 /// Represents a program, implementing some kind of boolean circuit.
 ///
