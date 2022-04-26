@@ -1,3 +1,4 @@
+mod bits;
 mod program;
 
 #[cfg(test)]
