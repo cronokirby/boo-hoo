@@ -87,7 +87,12 @@ impl BitBuf {
     /// Get a bit in the buffer by index.
     pub fn get(&self, index: usize) -> Option<Bit> {
         // Since 64 = 2^6, we have the following logic:
-        self.bits.get(index >> 6).map(|x| Bit(x & ((1 << 6) - 1)))
+        let hi = index >> 6;
+        let lo = index & ((1 << 6) - 1);
+        if lo >= self.index {
+            return None;
+        }
+        self.bits.get(hi).map(|x| Bit((x >> lo) & 1))
     }
 
     /// Return the number of bits held in this buffer.
@@ -131,5 +136,16 @@ mod test {
             buf.push(Bit::select(0, 0));
             assert_eq!(buf.len(), start_len + 1);
         }
+    }
+
+    #[test]
+    fn test_bitbuf_get() {
+        let buf = BitBuf {
+            bits: vec![0, 0b10],
+            index: 2,
+        };
+        assert_eq!(buf.get(65), Some(Bit(1)));
+        assert_eq!(buf.get(64), Some(Bit(0)));
+        assert_eq!(buf.get(67), None);
     }
 }
