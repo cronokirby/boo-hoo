@@ -55,6 +55,21 @@ impl BitBuf {
         }
     }
 
+    /// Create a bit buffer from bytes.
+    ///
+    /// The bits are considered to start at the lsb of bytes[0], and end at
+    /// the msb of bytes[-1].
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let index = 8 * (bytes.len() % 8);
+        let mut bits = Vec::with_capacity((bytes.len() + 7) / 8);
+        bytes.chunks(8).for_each(|chunk| {
+            let mut le_bytes = [0u8; 8];
+            le_bytes[..chunk.len()].copy_from_slice(chunk);
+            bits.push(u64::from_le_bytes(le_bytes));
+        });
+        Self { bits, index }
+    }
+
     pub fn push(&mut self, bit: Bit) {
         *self.end() |= bit.0 << self.index;
         self.index += 1;
@@ -147,5 +162,15 @@ mod test {
         assert_eq!(buf.get(65), Some(Bit(1)));
         assert_eq!(buf.get(64), Some(Bit(0)));
         assert_eq!(buf.get(67), None);
+    }
+
+    #[test]
+    fn test_bitbuf_from_bytes() {
+        let buf = BitBuf::from_bytes(&[0xAB, 0xCD]);
+        let expected = BitBuf {
+            bits: vec![0xCDAB],
+            index: 16,
+        };
+        assert_eq!(buf, expected);
     }
 }
