@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3ae9658e435221b32612ba64d00a4dcbcdcf659e3c8791e5588613e74d2114ec # shrinks to buf = BitBuf { bits: [0], index: 0 }, x = 0, index = 0
+cc 325437d221838d5981f8dcc54244c89cf58a6d098b788060f8c4efc9e915bccb # shrinks to buf = BitBuf { bits: [6176686888938635264], index: 51 }, x = 0, index = 0
+cc 9c3e4632bfe3d4d9eac320e321ad8df97fd8f05e1d3691b54f34db1ce706ba79 # shrinks to buf = BitBuf { bits: [0], index: 63 }, x = 0, index = 0

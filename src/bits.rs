@@ -4,7 +4,7 @@ use std::fmt::Debug;
 ///
 /// This is a convenience wrapper over a u64, but satisfying the invariant that
 /// only the LSB can be set.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Bit(u64);
 
 impl Bit {
@@ -29,7 +29,7 @@ impl From<Bit> for u64 {
 /// Represents a buffer containing bits.
 ///
 /// This is used to hold our working stack.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct BitBuf {
     /// The underlying buffer containing our bits.
     ///
@@ -73,12 +73,15 @@ impl BitBuf {
             }
             self.index = 63;
             self.bits.pop();
+        } else {
+            self.index -= 1;
         }
         // The idea is to start with xxXxx, then select, to get 00X00, then ^ to
         // get xx0xx in the buf, and then shift to get 0000X.
         let selected = *self.end() & (1 << self.index);
         *self.end() ^= selected;
-        Some(Bit(selected >> self.index))
+        let output = Bit(selected >> self.index);
+        Some(output)
     }
 
     /// Get a bit in the buffer by index.
@@ -91,5 +94,33 @@ impl BitBuf {
     pub fn len(&self) -> usize {
         // No underflow since the buffer is never empty
         64 * (self.bits.len() - 1) + self.index
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use proptest::collection::*;
+    use proptest::prelude::*;
+
+    prop_compose! {
+        fn arb_bit_buf()(mut bits in vec(any::<u64>(), 1..100usize), index in 0..64usize) -> BitBuf {
+            // Make sure that only the bits before index are set
+            *bits.last_mut().unwrap() &= (1 << index) - 1;
+            BitBuf { bits, index }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_push_then_pop_is_identity(buf in arb_bit_buf(), x in any::<u64>(), index in 0..64usize) {
+            let bit = Bit::select(x, index);
+            let mut buf2 = buf.clone();
+            buf2.push(bit);
+            let bit2 = buf2.pop();
+            assert_eq!(buf2, buf);
+            assert_eq!(bit2, Some(bit));
+        }
     }
 }
