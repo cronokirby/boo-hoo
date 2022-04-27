@@ -123,4 +123,13 @@ mod test {
             assert_eq!(bit2, Some(bit));
         }
     }
+
+    proptest! {
+        #[test]
+        fn test_push_increases_len_by_one(mut buf in arb_bit_buf()) {
+            let start_len = buf.len();
+            buf.push(Bit::select(0, 0));
+            assert_eq!(buf.len(), start_len + 1);
+        }
+    }
 }
