@@ -43,7 +43,7 @@ impl TriSimulator {
     /// Create a new trisimulator, initialized with some secret input.
     pub fn create<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> Self {
         let seeds = [(); 3].map(|_| Seed::random(rng));
-        let rngs = [1, 2, 3].map(|i| BitPRNG::seeded(&seeds[i]));
+        let rngs = [0, 1, 2].map(|i| BitPRNG::seeded(&seeds[i]));
         let inputs = split(rng, input);
         // Empty stacks and messages
         let stacks = [(); 3].map(|_| BitBuf::new());
@@ -63,6 +63,33 @@ impl TriSimulator {
             // Safe, because the program was validated
             let bit = unsafe { stack.pop().unwrap_unchecked() };
             stack.push(!bit);
+        }
+    }
+
+    fn and(&mut self) {
+        let mask_bits = [0, 1, 2].map(|i| self.rngs[i].next_bit());
+        let inputs = [0, 1, 2].map(|i| {
+            let stack = &mut self.stacks[i];
+            // Safe, because of program validation
+            let bit0 = unsafe { stack.pop().unwrap_unchecked() };
+            let bit1 = unsafe { stack.pop().unwrap_unchecked() };
+            (bit0, bit1)
+        });
+
+        for i0 in 0..3 {
+            let i1 = (i0 + 1) % 3;
+
+            // This is (one component of) an XOR secret sharing of the and of the value
+            let res = (inputs[i0].0 & inputs[i0].1)
+                ^ (inputs[i0].0 & inputs[i1].1)
+                ^ (inputs[i1].0 & inputs[i1].1)
+                ^ mask_bits[i0]
+                ^ mask_bits[i1];
+
+            // Since this involves "communication" between the simulated parties,
+            // we record having received this message
+            self.messages[i0].push(res);
+            self.stacks[i0].push(res);
         }
     }
 
@@ -102,7 +129,7 @@ impl TriSimulator {
     fn op(&mut self, op: Operation) {
         match op {
             Operation::Not => self.not(),
-            Operation::And => todo!(),
+            Operation::And => self.and(),
             Operation::Xor => self.xor(),
             Operation::PushArg(i) => self.push_arg(i),
             Operation::PushLocal(i) => self.push_local(i),
