@@ -86,14 +86,14 @@ impl Program {
         Ok(())
     }
 
-    /// Validate that a program is well formed, and return the input and output size.
+    /// Validate that a program is well formed.
     ///
     /// A program isn't well formed if it attempts to pop an element off of an
     /// empty stack, or access some other undefined element.
     ///
-    /// These functionalities are convenient to package together, because they
-    /// all require simulating the program.
-    pub fn validate(&self) -> Result<(usize, usize), ProgramError> {
+    /// We produce a new struct to allow for reusing the validated result
+    /// without redoing the logic.
+    pub fn validate(self) -> Result<ValidatedProgram, ProgramError> {
         let mut required_input: u32 = 0;
         let mut stack: usize = 0;
 
@@ -125,7 +125,34 @@ impl Program {
             }
         }
 
-        Ok((required_input as usize, stack))
+        Ok(ValidatedProgram {
+            input_count: required_input as usize,
+            output_count: stack,
+            operations: self.operations,
+        })
+    }
+}
+
+/// Represents a valid program.
+///
+/// Unlike a general program, we make sure that undefined elements of the stack
+/// are never accessed. We also already know the number of input bits required,
+/// as well as the number of output bits produced.
+///
+/// By having this information in a struct, we avoid re-validating a program
+/// if it's used multiple times.
+#[derive(Clone, Debug)]
+pub struct ValidatedProgram {
+    pub(crate) input_count: usize,
+    pub(crate) output_count: usize,
+    pub(crate) operations: Vec<Operation>,
+}
+
+// Utility functions for testing
+#[cfg(test)]
+impl ValidatedProgram {
+    fn io(&self) -> (usize, usize) {
+        (self.input_count, self.output_count)
     }
 }
 
@@ -146,19 +173,27 @@ mod test {
     fn test_validating_program_counts_correctly() {
         assert_eq!(
             Ok((2, 2)),
-            Program::new([PushArg(0), PushArg(1), Not]).validate()
+            Program::new([PushArg(0), PushArg(1), Not])
+                .validate()
+                .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 2)),
-            Program::new([PushArg(0), PushArg(0), Not]).validate()
+            Program::new([PushArg(0), PushArg(0), Not])
+                .validate()
+                .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 1)),
-            Program::new([PushArg(0), PushArg(0), Xor]).validate()
+            Program::new([PushArg(0), PushArg(0), Xor])
+                .validate()
+                .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 1)),
-            Program::new([PushArg(0), PushArg(0), And]).validate()
+            Program::new([PushArg(0), PushArg(0), And])
+                .validate()
+                .map(|x| x.io())
         );
     }
 }
