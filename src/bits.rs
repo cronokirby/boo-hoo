@@ -18,6 +18,12 @@ impl Bit {
         debug_assert!(bit < 64);
         Self((x >> bit) & 1)
     }
+
+    /// Select a given bit from some u8
+    pub fn select_u8(x: u8, bit: usize) -> Self {
+        debug_assert!(bit < 8);
+        Self::select(x as u64, bit)
+    }
 }
 
 impl From<Bit> for u64 {
