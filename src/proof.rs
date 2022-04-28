@@ -57,9 +57,18 @@ impl TriSimulator {
         }
     }
 
+    /// Advance the state through a ! operation.
+    fn not(&mut self) {
+        for stack in &mut self.stacks {
+            // Safe, because the program was validated
+            let bit = unsafe { stack.pop().unwrap_unchecked() };
+            stack.push(!bit);
+        }
+    }
+
     fn op(&mut self, op: Operation) {
         match op {
-            Operation::Not => todo!(),
+            Operation::Not => self.not(),
             Operation::And => todo!(),
             Operation::Xor => todo!(),
             Operation::PushArg(_) => todo!(),
