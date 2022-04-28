@@ -27,20 +27,34 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
 struct TriSimulation {
     seeds: [Seed; 3],
     inputs: [BitBuf; 3],
-    messages: [BitBuf; 3],
     outputs: [BitBuf; 3],
+    messages: [BitBuf; 3],
 }
 
 struct TriSimulator {
     seeds: [Seed; 3],
     rngs: [BitPRNG; 3],
+    inputs: [BitBuf; 3],
     stacks: [BitBuf; 3],
+    messages: [BitBuf; 3],
 }
 
 impl TriSimulator {
+    /// Create a new trisimulator, initialized with some secret input.
     pub fn create<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> Self {
         let seeds = [(); 3].map(|_| Seed::random(rng));
-        todo!()
+        let rngs = [1, 2, 3].map(|i| BitPRNG::seeded(&seeds[i]));
+        let inputs = split(rng, input);
+        // Empty stacks and messages
+        let stacks = [(); 3].map(|_| BitBuf::new());
+        let messages = stacks.clone();
+        Self {
+            seeds,
+            rngs,
+            inputs,
+            stacks,
+            messages,
+        }
     }
 
     fn op(&mut self, op: Operation) {
