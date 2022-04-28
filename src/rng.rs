@@ -56,7 +56,7 @@ impl BitPRNG {
     ///
     /// This seed entirely determines the stream of bits that this RNG will
     /// produce from that point on.
-    pub fn seeded(seed: Seed) -> Self {
+    pub fn seeded(seed: &Seed) -> Self {
         // We extend the seed to an arbitrary stream of bits, with some domain separation.
         let reader = blake3::Hasher::new_keyed(&seed.0)
             .update(PRNG_CONTEXT)
