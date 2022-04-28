@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops};
 
 /// Represents a single bit.
 ///
@@ -23,6 +23,47 @@ impl Bit {
 impl From<Bit> for u64 {
     fn from(b: Bit) -> Self {
         b.0
+    }
+}
+
+impl ops::BitXor for Bit {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        let mut out = self;
+        out ^= rhs;
+        out
+    }
+}
+
+impl ops::BitXorAssign for Bit {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        self.0 ^= rhs.0;
+    }
+}
+
+impl ops::BitAnd for Bit {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        let mut out = self;
+        out &= rhs;
+        out
+    }
+}
+
+impl ops::BitAndAssign for Bit {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
+
+impl ops::Not for Bit {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        // We don't want to negate anything but the first bit
+        Self(1 ^ self.0)
     }
 }
 
