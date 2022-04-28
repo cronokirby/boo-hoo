@@ -1,4 +1,4 @@
-use std::io;
+use std::{error, fmt, io};
 
 /// Represents an individual operation in the program.
 ///
@@ -36,6 +36,29 @@ impl Operation {
     }
 }
 
+/// An error that describes an invalid program.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProgramError {
+    /// The program had an insufficient stack at a given instruction.
+    InsufficientStack { instruction: usize, stack: usize },
+}
+
+impl fmt::Display for ProgramError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProgramError::InsufficientStack { instruction, stack } => {
+                write!(
+                    f,
+                    "instr {}: insufficient stack of size {}",
+                    instruction, stack
+                )
+            }
+        }
+    }
+}
+
+impl error::Error for ProgramError {}
+
 /// Represents a program, implementing some kind of boolean circuit.
 ///
 /// The programs represent boolean circuits using a sequence of stack-based
@@ -61,5 +84,81 @@ impl Program {
             op.write_to(w)?;
         }
         Ok(())
+    }
+
+    /// Validate that a program is well formed, and return the input and output size.
+    ///
+    /// A program isn't well formed if it attempts to pop an element off of an
+    /// empty stack, or access some other undefined element.
+    ///
+    /// These functionalities are convenient to package together, because they
+    /// all require simulating the program.
+    pub fn validate(&self) -> Result<(usize, usize), ProgramError> {
+        let mut required_input: u32 = 0;
+        let mut stack: usize = 0;
+
+        for (instruction, op) in self.operations.iter().enumerate() {
+            use Operation::*;
+
+            match op {
+                Not => {
+                    if stack < 1 {
+                        return Err(ProgramError::InsufficientStack { instruction, stack });
+                    }
+                }
+                Xor | And => {
+                    if stack < 2 {
+                        return Err(ProgramError::InsufficientStack { instruction, stack });
+                    }
+                    stack -= 1;
+                }
+                Operation::PushArg(i) => {
+                    required_input = u32::max(i + 1, required_input);
+                    stack += 1;
+                }
+                Operation::PushLocal(i) => {
+                    if (*i as usize) >= stack {
+                        return Err(ProgramError::InsufficientStack { instruction, stack });
+                    }
+                    stack += 1;
+                }
+            }
+        }
+
+        Ok((required_input as usize, stack))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use Operation::*;
+
+    #[test]
+    fn test_validating_program_with_insufficient_stack() {
+        assert!(Program::new([Not]).validate().is_err());
+        assert!(Program::new([And]).validate().is_err());
+        assert!(Program::new([PushArg(0), And]).validate().is_err());
+        assert!(Program::new([PushLocal(0)]).validate().is_err());
+    }
+
+    #[test]
+    fn test_validating_program_counts_correctly() {
+        assert_eq!(
+            Ok((2, 2)),
+            Program::new([PushArg(0), PushArg(1), Not]).validate()
+        );
+        assert_eq!(
+            Ok((1, 2)),
+            Program::new([PushArg(0), PushArg(0), Not]).validate()
+        );
+        assert_eq!(
+            Ok((1, 1)),
+            Program::new([PushArg(0), PushArg(0), Xor]).validate()
+        );
+        assert_eq!(
+            Ok((1, 1)),
+            Program::new([PushArg(0), PushArg(0), And]).validate()
+        );
     }
 }
