@@ -162,6 +162,17 @@ impl BitBuf {
         // No underflow since the buffer is never empty
         64 * (self.bits.len() - 1) + self.index
     }
+
+    /// Xor this buffer of bits with the bits of another.
+    ///
+    /// This is mainly useful when we split Buffers into multiple secret shares.
+    pub(crate) fn xor(&mut self, other: &BitBuf) {
+        for (self_i, other_i) in self.bits.iter_mut().zip(other.bits.iter()) {
+            *self_i ^= other_i;
+        }
+        // Clear all the bits past the end of the buffer
+        *self.end() &= (1 << self.index) - 1;
+    }
 }
 
 #[cfg(test)]
