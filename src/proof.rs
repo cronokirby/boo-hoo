@@ -77,7 +77,18 @@ impl TriSimulator {
         }
     }
 
-    // Advance the state through a push local operation.
+    /// Advance the state through a push local operation.
+    fn push_arg(&mut self, iu32: u32) {
+        let i = iu32 as usize;
+
+        for (stack, input) in self.stacks.iter_mut().zip(self.inputs.iter()) {
+            // Safe because we validated that the inputs were long enough.
+            let arg = unsafe { input.get(i).unwrap_unchecked() };
+            stack.push(arg);
+        }
+    }
+
+    /// Advance the state through a push local operation.
     fn push_local(&mut self, iu32: u32) {
         let i = iu32 as usize;
 
@@ -93,7 +104,7 @@ impl TriSimulator {
             Operation::Not => self.not(),
             Operation::And => todo!(),
             Operation::Xor => self.xor(),
-            Operation::PushArg(_) => todo!(),
+            Operation::PushArg(i) => self.push_arg(i),
             Operation::PushLocal(i) => self.push_local(i),
         }
     }
