@@ -5,7 +5,7 @@ use std::fmt::Debug;
 /// This is a convenience wrapper over a u64, but satisfying the invariant that
 /// only the LSB can be set.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Bit(u64);
+pub struct Bit(u64);
 
 impl Bit {
     /// Return the zero bit.
@@ -30,7 +30,7 @@ impl From<Bit> for u64 {
 ///
 /// This is used to hold our working stack.
 #[derive(Debug, Clone, PartialEq)]
-struct BitBuf {
+pub struct BitBuf {
     /// The underlying buffer containing our bits.
     ///
     /// This will *never* be empty.
