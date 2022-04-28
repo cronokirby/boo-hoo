@@ -1,5 +1,6 @@
 mod bits;
 mod program;
+mod rng;
 
 #[cfg(test)]
 mod tests {
