@@ -66,11 +66,22 @@ impl TriSimulator {
         }
     }
 
+    /// Advance the state through a ^ operation.
+    fn xor(&mut self) {
+        for stack in &mut self.stacks {
+            // Both safe, because the program was validated
+            let bit0 = unsafe { stack.pop().unwrap_unchecked() };
+            let bit1 = unsafe { stack.pop().unwrap_unchecked() };
+            // We can do this entirely locally, because of XOR secret sharing.
+            stack.push(bit0 ^ bit1);
+        }
+    }
+
     fn op(&mut self, op: Operation) {
         match op {
             Operation::Not => self.not(),
             Operation::And => todo!(),
-            Operation::Xor => todo!(),
+            Operation::Xor => self.xor(),
             Operation::PushArg(_) => todo!(),
             Operation::PushLocal(_) => todo!(),
         }
