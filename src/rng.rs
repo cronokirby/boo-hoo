@@ -1,4 +1,3 @@
-use blake3;
 use rand_core::{CryptoRng, RngCore};
 
 use crate::bits::Bit;
