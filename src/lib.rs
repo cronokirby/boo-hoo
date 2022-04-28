@@ -1,5 +1,6 @@
 mod bits;
 mod program;
+mod proof;
 mod rng;
 
 #[cfg(test)]
