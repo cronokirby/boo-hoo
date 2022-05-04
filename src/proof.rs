@@ -24,11 +24,16 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
     [buf0, buf1, buf2]
 }
 
+/// Represents the view of a single party in the MPC protocol.
+struct View {
+    seed: Seed,
+    input: BitBuf,
+    messages: BitBuf,
+}
+
 struct TriSimulation {
-    seeds: [Seed; 3],
-    inputs: [BitBuf; 3],
+    views: [View; 3],
     outputs: [BitBuf; 3],
-    messages: [BitBuf; 3],
 }
 
 struct TriSimulator {
@@ -136,7 +141,29 @@ impl TriSimulator {
         }
     }
 
-    pub fn run(self) -> TriSimulation {
-        todo!()
+    /// Run the simulation, producing the result.
+    ///
+    /// The result contains the views of each party, along with the outputs.
+    pub fn run(mut self, program: &ValidatedProgram) -> TriSimulation {
+        for op in &program.operations {
+            self.op(*op);
+        }
+        // Safe because we know that 3 results will be produced
+        let views = unsafe {
+            self.seeds
+                .into_iter()
+                .zip(self.inputs.into_iter())
+                .zip(self.messages.into_iter())
+                .map(|((seed, input), messages)| View {
+                    seed,
+                    input,
+                    messages,
+                })
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap_unchecked()
+        };
+        let outputs = self.stacks;
+        TriSimulation { views, outputs }
     }
 }
