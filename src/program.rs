@@ -1,4 +1,5 @@
-use std::{error, fmt, io};
+use bincode::{enc::Encoder, error::EncodeError, Encode};
+use std::{error, fmt};
 
 /// Represents an individual operation in the program.
 ///
@@ -17,20 +18,19 @@ pub enum Operation {
     PushLocal(u32),
 }
 
-impl Operation {
-    /// Serialize this operation into something implementing Write.
-    pub fn write_to(&self, w: &mut impl io::Write) -> io::Result<()> {
+impl Encode for Operation {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
         match self {
-            Operation::Not => w.write_all(&[0]),
-            Operation::And => w.write_all(&[1]),
-            Operation::Xor => w.write_all(&[2]),
+            Operation::Not => 0u8.encode(encoder),
+            Operation::And => 1u8.encode(encoder),
+            Operation::Xor => 2u8.encode(encoder),
             Operation::PushArg(index) => {
-                w.write_all(&[3])?;
-                w.write_all(&index.to_le_bytes())
+                3u8.encode(encoder)?;
+                index.encode(encoder)
             }
             Operation::PushLocal(index) => {
-                w.write_all(&[4])?;
-                w.write_all(&index.to_le_bytes())
+                4u8.encode(encoder)?;
+                index.encode(encoder)
             }
         }
     }
@@ -63,7 +63,7 @@ impl error::Error for ProgramError {}
 ///
 /// The programs represent boolean circuits using a sequence of stack-based
 /// operations.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Encode, PartialEq)]
 pub struct Program {
     operations: Vec<Operation>,
 }
@@ -76,14 +76,6 @@ impl Program {
         Self {
             operations: operations.into(),
         }
-    }
-
-    /// Serialize this program into something implementing Write.
-    pub fn write_to(&self, w: &mut impl io::Write) -> io::Result<()> {
-        for op in &self.operations {
-            op.write_to(w)?;
-        }
-        Ok(())
     }
 
     /// Validate that a program is well formed.
