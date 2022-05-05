@@ -1,3 +1,9 @@
+use bincode::{
+    de::Decoder,
+    enc::Encoder,
+    error::{DecodeError, EncodeError},
+    Decode, Encode,
+};
 use std::{fmt::Debug, ops};
 
 /// Represents a single bit.
@@ -172,6 +178,29 @@ impl BitBuf {
         }
         // Clear all the bits past the end of the buffer
         *self.end() &= (1 << self.index) - 1;
+    }
+}
+
+impl Encode for BitBuf {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        self.len().encode(encoder)?;
+        self.bits.encode(encoder)
+    }
+}
+
+impl Decode for BitBuf {
+    fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, DecodeError> {
+        let bit_len = usize::decode(decoder)?;
+        let len = bit_len / 64 + 1;
+        let index = len % 64;
+
+        decoder.claim_container_read::<u64>(len)?;
+        let mut bits = Vec::with_capacity(len);
+        for _ in 0..len {
+            decoder.unclaim_bytes_read(core::mem::size_of::<u64>());
+            bits.push(u64::decode(decoder)?)
+        }
+        Ok(Self { bits, index })
     }
 }
 
