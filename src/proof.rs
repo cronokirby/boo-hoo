@@ -1,6 +1,8 @@
 use crate::bits::*;
 use crate::program::*;
 use crate::rng::{BitPRNG, Seed};
+use bincode::Decode;
+use bincode::Encode;
 use rand_core::{CryptoRng, RngCore};
 
 /// Split a BitBuf into 3 shares which xor to form the original input.
@@ -25,6 +27,7 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
 }
 
 /// Represents the view of a single party in the MPC protocol.
+#[derive(Clone, Encode, Decode)]
 struct View {
     seed: Seed,
     input: BitBuf,

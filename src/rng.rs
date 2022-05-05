@@ -1,3 +1,4 @@
+use bincode::{Decode, Encode};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::bits::Bit;
@@ -6,7 +7,7 @@ use crate::bits::Bit;
 const SEED_LEN: usize = blake3::KEY_LEN;
 
 /// Represents the seed to a pseudo-random RNG.
-#[derive(Clone)]
+#[derive(Encode, Decode, Clone)]
 pub struct Seed([u8; blake3::KEY_LEN]);
 
 impl Seed {
