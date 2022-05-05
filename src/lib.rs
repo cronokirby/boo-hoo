@@ -1,4 +1,6 @@
 mod bits;
+mod commitment;
+mod constants;
 mod program;
 mod proof;
 mod rng;
