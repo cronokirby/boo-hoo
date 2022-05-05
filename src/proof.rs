@@ -170,3 +170,25 @@ impl TriSimulator {
         TriSimulation { views, outputs }
     }
 }
+
+pub struct Proof;
+
+pub enum Error {}
+
+fn do_prove<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    program: &ValidatedProgram,
+    input: &BitBuf,
+    output: &BitBuf,
+) -> Proof {
+    todo!()
+}
+
+pub fn prove<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    program: &ValidatedProgram,
+    input: &[u8],
+    output: &[u8],
+) -> Result<Proof, Error> {
+    todo!()
+}
