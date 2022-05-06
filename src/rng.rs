@@ -79,6 +79,7 @@ impl BitPRNG {
             self.fill_buf();
         }
         let index = self.bit_index;
+        self.bit_index += 1;
         // This should optimize to shifts and masks
         Bit::select_u8(self.buf[index / 8], index % 8)
     }
