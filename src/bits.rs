@@ -95,7 +95,7 @@ pub struct BitBuf {
 impl BitBuf {
     fn end(&mut self) -> &mut u64 {
         // This is safe because we guarantee that the buffer is never empty.
-        unsafe { self.bits.last_mut().unwrap_unchecked() }
+        self.bits.last_mut().unwrap()
     }
 }
 
@@ -103,7 +103,7 @@ impl BitBuf {
     /// Create a new, empty buffer.
     pub fn new() -> Self {
         Self {
-            bits: Vec::new(),
+            bits: vec![0],
             index: 0,
         }
     }

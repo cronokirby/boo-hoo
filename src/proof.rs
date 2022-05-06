@@ -41,7 +41,7 @@ fn and(input_a: (Bit, Bit), input_b: (Bit, Bit), mask_a: Bit, mask_b: Bit) -> Bi
 }
 
 /// Represents
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Machine {
     input: BitBuf,
     stack: BitBuf,
@@ -60,7 +60,7 @@ impl Machine {
     /// This is UB of the stack is empty. This is why validating the program
     /// being run is important.
     fn pop(&mut self) -> Bit {
-        unsafe { self.stack.pop().unwrap_unchecked() }
+        self.stack.pop().unwrap()
     }
 
     /// Push a bit onto the stack.
@@ -83,21 +83,20 @@ impl Machine {
 
     /// Push a bit of the input onto the stack.
     fn push_arg(&mut self, i: usize) {
-        let arg = unsafe { self.input.get(i).unwrap_unchecked() };
+        let arg = self.input.get(i).unwrap();
         self.push(arg);
     }
 
     /// Push a bit from the stack back onto the stack.
     fn push_local(&mut self, i: usize) {
         // Safe, once again, because of program validation
-        let local = unsafe { self.stack.get(i).unwrap_unchecked() };
+        let local = self.stack.get(i).unwrap();
         self.push(local);
     }
 }
 
-//
 /// Represents the view of a single party in the MPC protocol.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 struct View {
     seed: Seed,
     input: BitBuf,
@@ -203,8 +202,8 @@ impl TriSimulator {
             });
             outputs.push(machine.stack);
         }
-        let views = unsafe { views.try_into().unwrap_unchecked() };
-        let outputs = unsafe { outputs.try_into().unwrap_unchecked() };
+        let views = views.try_into().unwrap();
+        let outputs = outputs.try_into().unwrap();
         TriSimulation { views, outputs }
     }
 }
@@ -248,7 +247,6 @@ fn do_prove<R: RngCore + CryptoRng>(
     input: &BitBuf,
     output: &BitBuf,
 ) -> Proof {
-    let config = config::standard();
 
     let mut commitments = Vec::with_capacity(REPETITIONS * 3);
     let mut outputs = Vec::with_capacity(REPETITIONS * 3);
@@ -488,6 +486,7 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
     })
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     InsufficientInput(usize),
     InsufficientOutput(usize),
@@ -509,6 +508,7 @@ pub fn prove<R: RngCore + CryptoRng>(
     }
     input_buf.resize(program.input_count);
     output_buf.resize(program.output_count);
+    dbg!(&input_buf, &output_buf);
     Ok(do_prove(rng, program, &input_buf, &output_buf))
 }
 
@@ -520,4 +520,46 @@ pub fn verify(program: &ValidatedProgram, output: &[u8], proof: &Proof) -> Resul
     output_buf.resize(program.output_count);
 
     Ok(do_verify(program, &output_buf, proof))
+}
+
+#[cfg(test)]
+mod test {
+    use rand_core::OsRng;
+
+    use super::*;
+    use crate::program::*;
+
+    fn simple_program() -> ValidatedProgram {
+        use Operation::*;
+
+        Program::new([
+            PushArg(0),
+            PushArg(1),
+            PushArg(2),
+            PushArg(3),
+            Xor,
+            Xor,
+            Xor,
+            PushArg(4),
+            PushArg(5),
+            PushArg(6),
+            PushArg(7),
+            Xor,
+            Xor,
+            Xor,
+            And,
+        ])
+        .validate()
+        .unwrap()
+    }
+
+    #[test]
+    fn test_simple_program_proof_succeeds() {
+        let input = &[0b0110_1001];
+        let output = &[1];
+        let program = simple_program();
+        let proof = prove(&mut OsRng, &program, input, output);
+        assert!(proof.is_ok());
+        assert_eq!(Ok(true), verify(&program, output, &proof.unwrap()));
+    }
 }
