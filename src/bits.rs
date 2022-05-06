@@ -169,6 +169,15 @@ impl BitBuf {
         64 * (self.bits.len() - 1) + self.index
     }
 
+    /// Resize the buffer to a given number of bits, filling with zeros as necessary.
+    pub fn resize(&mut self, bit_len: usize) {
+        let len = bit_len / 64 + 1;
+        self.index = bit_len % 64;
+        self.bits.resize(len, 0);
+        // Clear all the bits at the end of the buffer.
+        *self.end() &= (1 << self.index) - 1;
+    }
+
     /// Xor this buffer of bits with the bits of another.
     ///
     /// This is mainly useful when we split Buffers into multiple secret shares.

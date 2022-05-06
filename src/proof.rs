@@ -284,7 +284,10 @@ fn do_prove<R: RngCore + CryptoRng>(
         views,
     }
 }
-pub enum Error {}
+pub enum Error {
+    InsufficientInput(usize),
+    InsufficientOutput(usize),
+}
 
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
@@ -292,5 +295,15 @@ pub fn prove<R: RngCore + CryptoRng>(
     input: &[u8],
     output: &[u8],
 ) -> Result<Proof, Error> {
-    todo!()
+    let mut input_buf = BitBuf::from_bytes(input);
+    let mut output_buf = BitBuf::from_bytes(output);
+    if input_buf.len() < program.input_count {
+        return Err(Error::InsufficientInput(input_buf.len()));
+    }
+    if output_buf.len() < program.output_count {
+        return Err(Error::InsufficientOutput(output_buf.len()));
+    }
+    input_buf.resize(program.input_count);
+    output_buf.resize(program.output_count);
+    Ok(do_prove(rng, program, &input_buf, &output_buf))
 }
