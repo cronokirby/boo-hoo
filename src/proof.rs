@@ -178,6 +178,7 @@ impl TriSimulator {
 
 pub struct Proof {
     commitments: Vec<Commitment>,
+    outputs: Vec<BitBuf>,
     decommitments: Vec<Decommitment>,
     views: Vec<View>,
 }
@@ -197,22 +198,29 @@ fn do_prove<R: RngCore + CryptoRng>(
     let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
     encode_into_std_write(&program.operations, &mut hasher, config).unwrap();
     encode_into_std_write(&output, &mut hasher, config).unwrap();
+    encode_into_std_write(REPETITIONS, &mut hasher, config).unwrap();
 
     let mut commitments = Vec::with_capacity(REPETITIONS * 3);
+    let mut outputs = Vec::with_capacity(REPETITIONS * 3);
     let mut all_decommitments = Vec::with_capacity(REPETITIONS * 3);
     let mut all_views = Vec::with_capacity(REPETITIONS * 3);
 
     for _ in 0..REPETITIONS {
         let simulation = TriSimulator::create(rng, input.clone()).run(program);
 
+        for output in simulation.outputs {
+            outputs.push(output);
+        }
+
         for view in simulation.views {
             let (com, decom) = commitment::commit(rng, &view);
-            encode_into_std_write(&com, &mut hasher, config).unwrap();
             commitments.push(com);
             all_decommitments.push(decom);
             all_views.push(view);
         }
     }
+    encode_into_std_write(&commitments, &mut hasher, config).unwrap();
+    encode_into_std_write(&outputs, &mut hasher, config).unwrap();
 
     let mut bit_rng = BitPRNG::from_hasher(hasher);
 
@@ -238,6 +246,7 @@ fn do_prove<R: RngCore + CryptoRng>(
 
     Proof {
         commitments,
+        outputs,
         decommitments,
         views,
     }
