@@ -2,6 +2,7 @@ use crate::bits::*;
 use crate::commitment;
 use crate::commitment::Commitment;
 use crate::commitment::Decommitment;
+use crate::constants::REPETITIONS;
 use crate::program::*;
 use crate::rng::{BitPRNG, Seed};
 use bincode::Decode;
@@ -177,8 +178,8 @@ impl TriSimulator {
 
 pub struct Proof {
     commitments: Vec<Commitment>,
-    views: Vec<View>,
     decommitments: Vec<Decommitment>,
+    views: Vec<View>,
 }
 
 const CHALLENGE_CONTEXT: &'static str = "boo-hoo v0.1.0 challenge context";
@@ -189,44 +190,50 @@ const CHALLENGE_CONTEXT: &'static str = "boo-hoo v0.1.0 challenge context";
 fn do_prove<R: RngCore + CryptoRng>(
     rng: &mut R,
     program: &ValidatedProgram,
-    input: BitBuf,
-    output: BitBuf,
+    input: &BitBuf,
+    output: &BitBuf,
 ) -> Proof {
-    let simulation = TriSimulator::create(rng, input).run(program);
-
-    let mut commitments = Vec::with_capacity(3);
-    let mut all_decommitments = Vec::with_capacity(3);
-    for i in [0, 1, 2] {
-        let (com, decom) = commitment::commit(rng, &simulation.views[i]);
-        commitments.push(com);
-        all_decommitments.push(decom);
-    }
-
     let config = config::standard();
     let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
     encode_into_std_write(&program.operations, &mut hasher, config).unwrap();
     encode_into_std_write(&output, &mut hasher, config).unwrap();
-    encode_into_std_write(&simulation.outputs, &mut hasher, config).unwrap();
-    encode_into_std_write(&commitments, &mut hasher, config).unwrap();
+
+    let mut commitments = Vec::with_capacity(REPETITIONS * 3);
+    let mut all_decommitments = Vec::with_capacity(REPETITIONS * 3);
+    let mut all_views = Vec::with_capacity(REPETITIONS * 3);
+
+    for _ in 0..REPETITIONS {
+        let simulation = TriSimulator::create(rng, input.clone()).run(program);
+
+        for view in simulation.views {
+            let (com, decom) = commitment::commit(rng, &view);
+            encode_into_std_write(&com, &mut hasher, config).unwrap();
+            commitments.push(com);
+            all_decommitments.push(decom);
+            all_views.push(view);
+        }
+    }
 
     let mut bit_rng = BitPRNG::from_hasher(hasher);
-    let trit = bit_rng.next_trit();
 
-    let mut views = Vec::with_capacity(2);
-    for (i, view) in simulation.views.into_iter().enumerate() {
-        let i_u8 = i as u8;
-        if i_u8 != trit && i_u8 != (trit + 1) % 3 {
-            continue;
+    let mut decommitments = Vec::with_capacity(REPETITIONS * 2);
+    let mut views = Vec::with_capacity(REPETITIONS * 2);
+
+    let mut trit = 0;
+    for (i, (decom, view)) in all_decommitments
+        .into_iter()
+        .zip(all_views.into_iter())
+        .enumerate()
+    {
+        let i_mod_3 = (i % 3) as u8;
+        if i_mod_3 == 0 {
+            trit = bit_rng.next_trit();
         }
-        views.push(view);
-    }
-    let mut decommitments = Vec::with_capacity(2);
-    for (i, decom) in all_decommitments.into_iter().enumerate() {
-        let i_u8 = i as u8;
-        if i_u8 != trit && i_u8 != (trit + 1) % 3 {
+        if i_mod_3 != trit && i_mod_3 != (trit + 1) % 3 {
             continue;
         }
         decommitments.push(decom);
+        views.push(view);
     }
 
     Proof {

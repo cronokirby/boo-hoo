@@ -4,3 +4,5 @@ pub const SECURITY_PARAMETER: usize = 128;
 pub const HASH_SIZE: usize = 2 * SECURITY_PARAMETER;
 /// The number of bytes making up our hash size.
 pub const HASH_SIZE_BYTES: usize = (HASH_SIZE + 7) / 8;
+/// Enough for a tiny amount under 128 bits of security.
+pub const REPETITIONS: usize = 218;
