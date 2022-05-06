@@ -300,18 +300,97 @@ fn do_prove<R: RngCore + CryptoRng>(
     }
 }
 
+struct ReSimulation {
+    primary_messages: BitBuf,
+    outputs: [BitBuf; 2],
+}
+
+struct ReSimulator<'a> {
+    primary_messages: BitBuf,
+    secondary_messages: &'a BitBuf,
+    machines: [Machine; 2],
+}
+
+impl<'a> ReSimulator<'a> {
+    fn new(inputs: [&'a BitBuf; 2], secondary_messages: &'a BitBuf) -> Self {
+        Self {
+            primary_messages: BitBuf::new(),
+            secondary_messages,
+            machines: [
+                Machine::new(inputs[0].clone()),
+                Machine::new(inputs[1].clone()),
+            ],
+        }
+    }
+
+    fn op(&mut self, op: Operation) {
+        todo!();
+    }
+
+    pub fn run(mut self, program: &ValidatedProgram) -> ReSimulation {
+        for op in &program.operations {
+            self.op(*op);
+        }
+
+        let primary_messages = self.primary_messages;
+        let outputs = self.machines.map(|machine| machine.stack);
+        ReSimulation {
+            primary_messages,
+            outputs,
+        }
+    }
+}
+
 /// Verify a single repetition of the proof.
 ///
 /// The slices `commitments` and `outputs` should have 3 elements, and
 /// `decommitments` and `views` should have 2 elements.
 fn verify_repetition(
+    program: &ValidatedProgram,
+    output: &BitBuf,
     commitments: &[Commitment],
     outputs: &[BitBuf],
     trit: u8,
     decommitments: &[Decommitment],
     views: &[View],
 ) -> bool {
-    todo!()
+    // Check that the output is correct
+    let mut actual_output = outputs[0].clone();
+    actual_output.xor(&outputs[1]);
+    actual_output.xor(&outputs[2]);
+
+    if actual_output != *output {
+        return false;
+    }
+
+    // We may need to swap these if we have trit 2, which gives (0, 2) as the order,
+    // but we'd want (2, 0) instead.
+    let mut decommitments = [&decommitments[0], &decommitments[1]];
+    let mut views = [&views[0], &views[1]];
+
+    let i = [trit as usize, ((trit + 1) % 3) as usize];
+    if i[0] == 2 {
+        decommitments.swap(0, 1);
+        views.swap(0, 1);
+    }
+
+    // Check that the commitments are valid
+    if !(0..2).all(|j| {
+        let i_j = i[j];
+        commitment::decommit(&views[j], &commitments[i_j], decommitments[j])
+    }) {
+        return false;
+    }
+
+    // Check that the views are coherent, and produce the right output
+    let re_simulation =
+        ReSimulator::new([&views[0].input, &views[1].input], &views[1].messages).run(program);
+
+    if re_simulation.primary_messages != views[0].messages {
+        return false;
+    }
+
+    (0..2).all(|j| re_simulation.outputs[j] == outputs[i[j]])
 }
 
 fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool {
@@ -334,6 +413,8 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
     (0..REPETITIONS).all(|i| {
         let trit = bit_rng.next_trit();
         verify_repetition(
+            program,
+            output,
             &proof.commitments[i..i + 3],
             &proof.outputs[i..i + 3],
             trit,
