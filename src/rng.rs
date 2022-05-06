@@ -59,9 +59,16 @@ impl BitPRNG {
     /// produce from that point on.
     pub fn seeded(seed: &Seed) -> Self {
         // We extend the seed to an arbitrary stream of bits, with some domain separation.
-        let reader = blake3::Hasher::new_keyed(&seed.0)
-            .update(PRNG_CONTEXT)
-            .finalize_xof();
+        let mut hasher = blake3::Hasher::new_keyed(&seed.0);
+        hasher.update(PRNG_CONTEXT);
+        Self::from_hasher(hasher)
+    }
+
+    /// Create a BitPRNG from a blake3 hasher.
+    ///
+    /// This will finalize the hasher, and then read bits from its output.
+    pub fn from_hasher(hasher: blake3::Hasher) -> Self {
+        let reader = hasher.finalize_xof();
         // Create the output with an uninitialized buffer, but fill it immediately
         let mut out = Self {
             reader,
@@ -82,5 +89,17 @@ impl BitPRNG {
         self.bit_index += 1;
         // This should optimize to shifts and masks
         Bit::select_u8(self.buf[index / 8], index % 8)
+    }
+
+    /// Read the next value mod 3 from the output stream of this RNG
+    pub fn next_trit(&mut self) -> u8 {
+        loop {
+            let a = u64::from(self.next_bit()) as u8;
+            let b = u64::from(self.next_bit()) as u8;
+            let trit = (a << 1) | b;
+            if trit < 3 {
+                return trit;
+            }
+        }
     }
 }
