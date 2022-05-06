@@ -1,8 +1,12 @@
 use crate::bits::*;
+use crate::commitment;
+use crate::commitment::Commitment;
+use crate::commitment::Decommitment;
 use crate::program::*;
 use crate::rng::{BitPRNG, Seed};
 use bincode::Decode;
 use bincode::Encode;
+use bincode::{config, encode_into_std_write};
 use rand_core::{CryptoRng, RngCore};
 
 /// Split a BitBuf into 3 shares which xor to form the original input.
@@ -171,18 +175,67 @@ impl TriSimulator {
     }
 }
 
-pub struct Proof;
+pub struct Proof {
+    commitments: Vec<Commitment>,
+    views: Vec<View>,
+    decommitments: Vec<Decommitment>,
+}
 
-pub enum Error {}
+const CHALLENGE_CONTEXT: &'static str = "boo-hoo v0.1.0 challenge context";
 
+/// An internal function for creating a proof, after validating inputs.
+///
+/// The buffers for input and output must have the exact right length for the program.
 fn do_prove<R: RngCore + CryptoRng>(
     rng: &mut R,
     program: &ValidatedProgram,
-    input: &BitBuf,
-    output: &BitBuf,
+    input: BitBuf,
+    output: BitBuf,
 ) -> Proof {
-    todo!()
+    let simulation = TriSimulator::create(rng, input).run(program);
+
+    let mut commitments = Vec::with_capacity(3);
+    let mut all_decommitments = Vec::with_capacity(3);
+    for i in [0, 1, 2] {
+        let (com, decom) = commitment::commit(rng, &simulation.views[i]);
+        commitments.push(com);
+        all_decommitments.push(decom);
+    }
+
+    let config = config::standard();
+    let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
+    encode_into_std_write(&program.operations, &mut hasher, config).unwrap();
+    encode_into_std_write(&output, &mut hasher, config).unwrap();
+    encode_into_std_write(&simulation.outputs, &mut hasher, config).unwrap();
+    encode_into_std_write(&commitments, &mut hasher, config).unwrap();
+
+    let mut bit_rng = BitPRNG::from_hasher(hasher);
+    let trit = bit_rng.next_trit();
+
+    let mut views = Vec::with_capacity(2);
+    for (i, view) in simulation.views.into_iter().enumerate() {
+        let i_u8 = i as u8;
+        if i_u8 != trit && i_u8 != (trit + 1) % 3 {
+            continue;
+        }
+        views.push(view);
+    }
+    let mut decommitments = Vec::with_capacity(2);
+    for (i, decom) in all_decommitments.into_iter().enumerate() {
+        let i_u8 = i as u8;
+        if i_u8 != trit && i_u8 != (trit + 1) % 3 {
+            continue;
+        }
+        decommitments.push(decom);
+    }
+
+    Proof {
+        commitments,
+        decommitments,
+        views,
+    }
 }
+pub enum Error {}
 
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,

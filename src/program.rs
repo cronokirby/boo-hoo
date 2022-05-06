@@ -63,7 +63,7 @@ impl error::Error for ProgramError {}
 ///
 /// The programs represent boolean circuits using a sequence of stack-based
 /// operations.
-#[derive(Clone, Debug, Encode, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Program {
     operations: Vec<Operation>,
 }
