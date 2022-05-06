@@ -218,7 +218,28 @@ pub struct Proof {
 
 const CHALLENGE_CONTEXT: &'static str = "boo-hoo v0.1.0 challenge context";
 
-/// An internal function for creating a proof, after validating inputs.
+/// Our challenge is a series of trits, which we draw from a PRNG.
+fn challenge(
+    program: &ValidatedProgram,
+    output: &BitBuf,
+    commitments: &Vec<Commitment>,
+    outputs: &Vec<BitBuf>,
+) -> BitPRNG {
+    fn update<E: Encode>(hasher: &mut blake3::Hasher, e: E) {
+        encode_into_std_write(e, hasher, config::standard()).unwrap();
+    }
+
+    let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
+    update(&mut hasher, &program.operations);
+    update(&mut hasher, output);
+    update(&mut hasher, REPETITIONS);
+    update(&mut hasher, commitments);
+    update(&mut hasher, outputs);
+
+    BitPRNG::from_hasher(hasher)
+}
+
+/// An internal function for creating a proof, after validkkoating inputs.
 ///
 /// The buffers for input and output must have the exact right length for the program.
 fn do_prove<R: RngCore + CryptoRng>(
@@ -228,10 +249,6 @@ fn do_prove<R: RngCore + CryptoRng>(
     output: &BitBuf,
 ) -> Proof {
     let config = config::standard();
-    let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
-    encode_into_std_write(&program.operations, &mut hasher, config).unwrap();
-    encode_into_std_write(&output, &mut hasher, config).unwrap();
-    encode_into_std_write(REPETITIONS, &mut hasher, config).unwrap();
 
     let mut commitments = Vec::with_capacity(REPETITIONS * 3);
     let mut outputs = Vec::with_capacity(REPETITIONS * 3);
@@ -252,10 +269,8 @@ fn do_prove<R: RngCore + CryptoRng>(
             all_views.push(view);
         }
     }
-    encode_into_std_write(&commitments, &mut hasher, config).unwrap();
-    encode_into_std_write(&outputs, &mut hasher, config).unwrap();
 
-    let mut bit_rng = BitPRNG::from_hasher(hasher);
+    let mut bit_rng = challenge(program, output, &commitments, &outputs);
 
     let mut decommitments = Vec::with_capacity(REPETITIONS * 2);
     let mut views = Vec::with_capacity(REPETITIONS * 2);
@@ -285,8 +300,47 @@ fn do_prove<R: RngCore + CryptoRng>(
     }
 }
 
-fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool {
+/// Verify a single repetition of the proof.
+///
+/// The slices `commitments` and `outputs` should have 3 elements, and
+/// `decommitments` and `views` should have 2 elements.
+fn verify_repetition(
+    commitments: &[Commitment],
+    outputs: &[BitBuf],
+    trit: u8,
+    decommitments: &[Decommitment],
+    views: &[View],
+) -> bool {
     todo!()
+}
+
+fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool {
+    // Check that the proof has enough content
+    if proof.commitments.len() != 3 * REPETITIONS {
+        return false;
+    }
+    if proof.outputs.len() != 3 * REPETITIONS {
+        return false;
+    }
+    if proof.decommitments.len() != 2 * REPETITIONS {
+        return false;
+    }
+    if proof.views.len() != 2 * REPETITIONS {
+        return false;
+    }
+
+    let mut bit_rng = challenge(program, output, &proof.commitments, &proof.outputs);
+
+    (0..REPETITIONS).all(|i| {
+        let trit = bit_rng.next_trit();
+        verify_repetition(
+            &proof.commitments[i..i + 3],
+            &proof.outputs[i..i + 3],
+            trit,
+            &proof.decommitments[i..i + 3],
+            &proof.views[i..i + 2],
+        )
+    })
 }
 
 pub enum Error {
@@ -312,7 +366,6 @@ pub fn prove<R: RngCore + CryptoRng>(
     output_buf.resize(program.output_count);
     Ok(do_prove(rng, program, &input_buf, &output_buf))
 }
-
 
 pub fn verify(program: &ValidatedProgram, output: &[u8], proof: &Proof) -> Result<bool, Error> {
     let mut output_buf = BitBuf::from_bytes(output);
