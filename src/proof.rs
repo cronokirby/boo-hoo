@@ -31,6 +31,71 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
     [buf0, buf1, buf2]
 }
 
+/// The and function between two parties.
+///
+/// When computing an and operation, each party needs the input from the party
+/// adjacent to them, and the mask bit from the party adjacent to them. This
+/// results in their secret share of the and operation.
+fn and(input_a: (Bit, Bit), input_b: (Bit, Bit), mask_a: Bit, mask_b: Bit) -> Bit {
+    (input_a.0 & input_a.1) ^ (input_a.0 & input_b.1) & (input_b.0 & input_a.1) ^ mask_a ^ mask_b
+}
+
+/// Represents
+#[derive(Clone)]
+struct Machine {
+    input: BitBuf,
+    stack: BitBuf,
+}
+
+impl Machine {
+    fn new(input: BitBuf) -> Self {
+        Self {
+            input,
+            stack: BitBuf::new(),
+        }
+    }
+
+    /// Pop a bit off the stack.
+    ///
+    /// This is UB of the stack is empty. This is why validating the program
+    /// being run is important.
+    fn pop(&mut self) -> Bit {
+        unsafe { self.stack.pop().unwrap_unchecked() }
+    }
+
+    /// Push a bit onto the stack.
+    fn push(&mut self, bit: Bit) {
+        self.stack.push(bit);
+    }
+
+    /// Negate the top bit on the stack.
+    fn not(&mut self) {
+        let top = self.pop();
+        self.push(!top);
+    }
+
+    /// xor the top two bits off the stack.
+    fn xor(&mut self) {
+        let a = self.pop();
+        let b = self.pop();
+        self.push(a ^ b);
+    }
+
+    /// Push a bit of the input onto the stack.
+    fn push_arg(&mut self, i: usize) {
+        let arg = unsafe { self.input.get(i).unwrap_unchecked() };
+        self.push(arg);
+    }
+
+    /// Push a bit from the stack back onto the stack.
+    fn push_local(&mut self, i: usize) {
+        // Safe, once again, because of program validation
+        let local = unsafe { self.stack.get(i).unwrap_unchecked() };
+        self.push(local);
+    }
+}
+
+//
 /// Represents the view of a single party in the MPC protocol.
 #[derive(Clone, Encode, Decode)]
 struct View {
@@ -47,8 +112,7 @@ struct TriSimulation {
 struct TriSimulator {
     seeds: [Seed; 3],
     rngs: [BitPRNG; 3],
-    inputs: [BitBuf; 3],
-    stacks: [BitBuf; 3],
+    machines: [Machine; 3],
     messages: [BitBuf; 3],
 }
 
@@ -58,94 +122,62 @@ impl TriSimulator {
         let seeds = [(); 3].map(|_| Seed::random(rng));
         let rngs = [0, 1, 2].map(|i| BitPRNG::seeded(&seeds[i]));
         let inputs = split(rng, input);
-        // Empty stacks and messages
-        let stacks = [(); 3].map(|_| BitBuf::new());
-        let messages = stacks.clone();
+        let machines = inputs.map(|input| Machine::new(input));
+        let messages = [(); 3].map(|_| BitBuf::new());
         Self {
             seeds,
             rngs,
-            inputs,
-            stacks,
+            machines,
             messages,
-        }
-    }
-
-    /// Advance the state through a ! operation.
-    fn not(&mut self) {
-        for stack in &mut self.stacks {
-            // Safe, because the program was validated
-            let bit = unsafe { stack.pop().unwrap_unchecked() };
-            stack.push(!bit);
         }
     }
 
     fn and(&mut self) {
         let mask_bits = [0, 1, 2].map(|i| self.rngs[i].next_bit());
         let inputs = [0, 1, 2].map(|i| {
-            let stack = &mut self.stacks[i];
-            // Safe, because of program validation
-            let bit0 = unsafe { stack.pop().unwrap_unchecked() };
-            let bit1 = unsafe { stack.pop().unwrap_unchecked() };
+            let machine = &mut self.machines[i];
+            let bit0 = machine.pop();
+            let bit1 = machine.pop();
             (bit0, bit1)
         });
 
         for i0 in 0..3 {
             let i1 = (i0 + 1) % 3;
 
-            // This is (one component of) an XOR secret sharing of the and of the value
-            let res = (inputs[i0].0 & inputs[i0].1)
-                ^ (inputs[i0].0 & inputs[i1].1)
-                ^ (inputs[i1].0 & inputs[i1].1)
-                ^ mask_bits[i0]
-                ^ mask_bits[i1];
+            let res = and(inputs[i0], inputs[i1], mask_bits[i0], mask_bits[i1]);
 
             // Since this involves "communication" between the simulated parties,
             // we record having received this message
             self.messages[i0].push(res);
-            self.stacks[i0].push(res);
-        }
-    }
-
-    /// Advance the state through a ^ operation.
-    fn xor(&mut self) {
-        for stack in &mut self.stacks {
-            // Both safe, because the program was validated
-            let bit0 = unsafe { stack.pop().unwrap_unchecked() };
-            let bit1 = unsafe { stack.pop().unwrap_unchecked() };
-            // We can do this entirely locally, because of XOR secret sharing.
-            stack.push(bit0 ^ bit1);
-        }
-    }
-
-    /// Advance the state through a push local operation.
-    fn push_arg(&mut self, iu32: u32) {
-        let i = iu32 as usize;
-
-        for (stack, input) in self.stacks.iter_mut().zip(self.inputs.iter()) {
-            // Safe because we validated that the inputs were long enough.
-            let arg = unsafe { input.get(i).unwrap_unchecked() };
-            stack.push(arg);
-        }
-    }
-
-    /// Advance the state through a push local operation.
-    fn push_local(&mut self, iu32: u32) {
-        let i = iu32 as usize;
-
-        for stack in &mut self.stacks {
-            // Safe, once again, because of program validation
-            let local = unsafe { stack.get(i).unwrap_unchecked() };
-            stack.push(local);
+            self.machines[i0].push(res);
         }
     }
 
     fn op(&mut self, op: Operation) {
         match op {
-            Operation::Not => self.not(),
+            Operation::Not => {
+                for machine in &mut self.machines {
+                    machine.not();
+                }
+            }
             Operation::And => self.and(),
-            Operation::Xor => self.xor(),
-            Operation::PushArg(i) => self.push_arg(i),
-            Operation::PushLocal(i) => self.push_local(i),
+            Operation::Xor => {
+                for machine in &mut self.machines {
+                    machine.xor();
+                }
+            }
+            Operation::PushArg(i) => {
+                let i_usize = i as usize;
+                for machine in &mut self.machines {
+                    machine.push_arg(i_usize);
+                }
+            }
+            Operation::PushLocal(i) => {
+                let i_usize = i as usize;
+                for machine in &mut self.machines {
+                    machine.push_local(i_usize);
+                }
+            }
         }
     }
 
@@ -156,22 +188,23 @@ impl TriSimulator {
         for op in &program.operations {
             self.op(*op);
         }
-        // Safe because we know that 3 results will be produced
-        let views = unsafe {
-            self.seeds
-                .into_iter()
-                .zip(self.inputs.into_iter())
-                .zip(self.messages.into_iter())
-                .map(|((seed, input), messages)| View {
-                    seed,
-                    input,
-                    messages,
-                })
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_unchecked()
-        };
-        let outputs = self.stacks;
+        let mut views = Vec::with_capacity(3);
+        let mut outputs = Vec::with_capacity(3);
+        for ((seed, machine), messages) in self
+            .seeds
+            .into_iter()
+            .zip(self.machines.into_iter())
+            .zip(self.messages.into_iter())
+        {
+            views.push(View {
+                seed,
+                input: machine.input,
+                messages,
+            });
+            outputs.push(machine.stack);
+        }
+        let views = unsafe { views.try_into().unwrap_unchecked() };
+        let outputs = unsafe { outputs.try_into().unwrap_unchecked() };
         TriSimulation { views, outputs }
     }
 }
