@@ -308,36 +308,88 @@ struct ReSimulation {
 struct ReSimulator<'a> {
     primary_messages: BitBuf,
     secondary_messages: &'a BitBuf,
+    secondary_messages_i: usize,
+    rngs: [BitPRNG; 2],
     machines: [Machine; 2],
 }
 
 impl<'a> ReSimulator<'a> {
-    fn new(inputs: [&'a BitBuf; 2], secondary_messages: &'a BitBuf) -> Self {
+    fn new(inputs: [&'a BitBuf; 2], seeds: [&'a Seed; 2], secondary_messages: &'a BitBuf) -> Self {
         Self {
             primary_messages: BitBuf::new(),
             secondary_messages,
-            machines: [
-                Machine::new(inputs[0].clone()),
-                Machine::new(inputs[1].clone()),
-            ],
+            secondary_messages_i: 0,
+            rngs: seeds.map(|seed| BitPRNG::seeded(seed)),
+            machines: inputs.map(|input| Machine::new(input.clone())),
         }
     }
 
-    fn op(&mut self, op: Operation) {
-        todo!();
+    fn next_secondary_message(&mut self) -> Option<Bit> {
+        let out = self.secondary_messages.get(self.secondary_messages_i);
+        self.secondary_messages_i += 1;
+        out
     }
 
-    pub fn run(mut self, program: &ValidatedProgram) -> ReSimulation {
+    fn and(&mut self) -> Option<()> {
+        let masks = [0, 1].map(|i| self.rngs[i].next_bit());
+        let inputs = [0, 1].map(|i| {
+            let machine = &mut self.machines[i];
+            let bit0 = machine.pop();
+            let bit1 = machine.pop();
+            (bit0, bit1)
+        });
+
+        let res = and(inputs[0], inputs[1], masks[0], masks[1]);
+        self.machines[0].push(res);
+        self.primary_messages.push(res);
+        // We just trust the secondary messages to be correct
+        let next_message = self.next_secondary_message()?;
+        self.machines[1].push(next_message);
+        Some(())
+    }
+
+    fn op(&mut self, op: Operation) -> Option<()> {
+        match op {
+            Operation::Not => {
+                for machine in &mut self.machines {
+                    machine.not();
+                }
+            }
+            Operation::And => self.and()?,
+            Operation::Xor => {
+                for machine in &mut self.machines {
+                    machine.xor();
+                }
+            }
+            Operation::PushArg(i) => {
+                for machine in &mut self.machines {
+                    machine.push_arg(i as usize)
+                }
+            }
+            Operation::PushLocal(i) => {
+                for machine in &mut self.machines {
+                    machine.push_local(i as usize)
+                }
+            }
+        }
+        Some(())
+    }
+
+    /// Run the resimulation on a given program.
+    ///
+    /// This can potentially fail, if not enough messages are passed to the simulator.
+    /// This indicates a bad proof.
+    pub fn run(mut self, program: &ValidatedProgram) -> Option<ReSimulation> {
         for op in &program.operations {
-            self.op(*op);
+            self.op(*op)?;
         }
 
         let primary_messages = self.primary_messages;
         let outputs = self.machines.map(|machine| machine.stack);
-        ReSimulation {
+        Some(ReSimulation {
             primary_messages,
             outputs,
-        }
+        })
     }
 }
 
@@ -362,6 +414,10 @@ fn verify_repetition(
     if actual_output != *output {
         return false;
     }
+    // Check input lengths
+    if !(0..2).all(|i| views[i].input.len() == program.input_count) {
+        return false;
+    }
 
     // We may need to swap these if we have trit 2, which gives (0, 2) as the order,
     // but we'd want (2, 0) instead.
@@ -383,8 +439,16 @@ fn verify_repetition(
     }
 
     // Check that the views are coherent, and produce the right output
-    let re_simulation =
-        ReSimulator::new([&views[0].input, &views[1].input], &views[1].messages).run(program);
+    let re_simulation_result = ReSimulator::new(
+        [&views[0].input, &views[1].input],
+        [&views[0].seed, &views[1].seed],
+        &views[1].messages,
+    )
+    .run(program);
+    let re_simulation = match re_simulation_result {
+        Some(x) => x,
+        None => return false,
+    };
 
     if re_simulation.primary_messages != views[0].messages {
         return false;
