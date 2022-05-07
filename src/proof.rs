@@ -522,17 +522,34 @@ mod test {
     use rand_core::OsRng;
 
     use super::*;
-    use crate::program::*;
 
     fn simple_program() -> ValidatedProgram {
         use Operation::*;
 
-        Program::new([PushArg(0)]).validate().unwrap()
+        Program::new([
+            PushArg(0),
+            PushArg(1),
+            PushArg(2),
+            PushArg(3),
+            Xor,
+            Xor,
+            Xor,
+            PushArg(4),
+            PushArg(5),
+            PushArg(6),
+            PushArg(7),
+            Xor,
+            Xor,
+            Xor,
+            And,
+        ])
+        .validate()
+        .unwrap()
     }
 
     #[test]
     fn test_simple_program_proof_succeeds() {
-        let input = &[1];
+        let input = &[0b0111_1110];
         let output = &[1];
         let program = simple_program();
         let proof = prove(&mut OsRng, &program, input, output);
