@@ -17,10 +17,12 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
     let mut bytes = vec![0u8; len_bytes];
 
     rng.fill_bytes(&mut bytes);
-    let buf0 = BitBuf::from_bytes(&bytes);
+    let mut buf0 = BitBuf::from_bytes(&bytes);
+    buf0.resize(input.len());
 
     rng.fill_bytes(&mut bytes);
-    let buf1 = BitBuf::from_bytes(&bytes);
+    let mut buf1 = BitBuf::from_bytes(&bytes);
+    buf1.resize(input.len());
 
     // Now, as a result, some of the upper bits in buf2 may be different,
     // but our program has been validated, and will never access these.
@@ -96,7 +98,7 @@ impl Machine {
 }
 
 /// Represents the view of a single party in the MPC protocol.
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Default, Debug, Encode, Decode)]
 struct View {
     seed: Seed,
     input: BitBuf,
@@ -272,21 +274,15 @@ fn do_prove<R: RngCore + CryptoRng>(
     let mut decommitments = Vec::with_capacity(REPETITIONS * 2);
     let mut views = Vec::with_capacity(REPETITIONS * 2);
 
-    let mut trit = 0;
-    for (i, (decom, view)) in all_decommitments
-        .into_iter()
-        .zip(all_views.into_iter())
-        .enumerate()
-    {
-        let i_mod_3 = (i % 3) as u8;
-        if i_mod_3 == 0 {
-            trit = bit_rng.next_trit();
+    for i in (0..REPETITIONS).map(|i| i * 3) {
+        let trit = bit_rng.next_trit() as usize;
+        let i0 = i + trit;
+        let i1 = i + ((trit + 1) % 3);
+        for ij in [i0, i1] {
+            println!("ij: {}", ij);
+            decommitments.push(std::mem::take(&mut all_decommitments[ij]));
+            views.push(std::mem::take(&mut all_views[ij]));
         }
-        if i_mod_3 != trit && i_mod_3 != (trit + 1) % 3 {
-            continue;
-        }
-        decommitments.push(decom);
-        views.push(view);
     }
 
     Proof {
@@ -420,21 +416,13 @@ fn verify_repetition(
         return false;
     }
 
-    // We may need to swap these if we have trit 2, which gives (0, 2) as the order,
-    // but we'd want (2, 0) instead.
-    let mut decommitments = [&decommitments[0], &decommitments[1]];
-    let mut views = [&views[0], &views[1]];
-
     let i = [trit as usize, ((trit + 1) % 3) as usize];
-    if i[0] == 2 {
-        decommitments.swap(0, 1);
-        views.swap(0, 1);
-    }
+    dbg!(i);
 
     // Check that the commitments are valid
     if !(0..2).all(|j| {
         let i_j = i[j];
-        commitment::decommit(&views[j], &commitments[i_j], decommitments[j])
+        commitment::decommit(&views[j], &commitments[i_j], &decommitments[j])
     }) {
         dbg!("bad commitments");
         return false;
@@ -484,11 +472,11 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
         verify_repetition(
             program,
             output,
-            &proof.commitments[i..i + 3],
-            &proof.outputs[i..i + 3],
+            &proof.commitments[3 * i..3 * (i + 1)],
+            &proof.outputs[3 * i..3 * (i + 1)],
             trit,
-            &proof.decommitments[i..i + 3],
-            &proof.views[i..i + 2],
+            &proof.decommitments[2 * i..2 * (i + 1)],
+            &proof.views[2 * i..2 * (i + 1)],
         )
     })
 }
@@ -539,30 +527,12 @@ mod test {
     fn simple_program() -> ValidatedProgram {
         use Operation::*;
 
-        Program::new([
-            PushArg(0),
-            PushArg(1),
-            PushArg(2),
-            PushArg(3),
-            Xor,
-            Xor,
-            Xor,
-            PushArg(4),
-            PushArg(5),
-            PushArg(6),
-            PushArg(7),
-            Xor,
-            Xor,
-            Xor,
-            And,
-        ])
-        .validate()
-        .unwrap()
+        Program::new([PushArg(0)]).validate().unwrap()
     }
 
     #[test]
     fn test_simple_program_proof_succeeds() {
-        let input = &[0b0110_1001];
+        let input = &[1];
         let output = &[1];
         let program = simple_program();
         let proof = prove(&mut OsRng, &program, input, output);

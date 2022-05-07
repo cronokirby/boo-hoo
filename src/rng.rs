@@ -7,7 +7,7 @@ use crate::bits::Bit;
 const SEED_LEN: usize = blake3::KEY_LEN;
 
 /// Represents the seed to a pseudo-random RNG.
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Default, Encode, Decode, Clone)]
 pub struct Seed([u8; blake3::KEY_LEN]);
 
 impl Seed {

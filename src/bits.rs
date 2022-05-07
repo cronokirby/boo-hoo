@@ -99,6 +99,12 @@ impl BitBuf {
     }
 }
 
+impl Default for BitBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitBuf {
     /// Create a new, empty buffer.
     pub fn new() -> Self {

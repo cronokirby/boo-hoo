@@ -7,7 +7,7 @@ use rand_core::{CryptoRng, RngCore};
 ///
 /// We reveal this in order to demonstrate that a given value was inside some
 /// commitment.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Default, Encode, Decode)]
 pub struct Decommitment([u8; KEY_LEN]);
 
 impl Decommitment {
