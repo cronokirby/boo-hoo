@@ -37,7 +37,7 @@ fn split<R: RngCore + CryptoRng>(rng: &mut R, input: BitBuf) -> [BitBuf; 3] {
 /// adjacent to them, and the mask bit from the party adjacent to them. This
 /// results in their secret share of the and operation.
 fn and(input_a: (Bit, Bit), input_b: (Bit, Bit), mask_a: Bit, mask_b: Bit) -> Bit {
-    (input_a.0 & input_a.1) ^ (input_a.0 & input_b.1) & (input_b.0 & input_a.1) ^ mask_a ^ mask_b
+    (input_a.0 & input_a.1) ^ (input_a.0 & input_b.1) ^ (input_b.0 & input_a.1) ^ mask_a ^ mask_b
 }
 
 /// Represents
@@ -247,7 +247,6 @@ fn do_prove<R: RngCore + CryptoRng>(
     input: &BitBuf,
     output: &BitBuf,
 ) -> Proof {
-
     let mut commitments = Vec::with_capacity(REPETITIONS * 3);
     let mut outputs = Vec::with_capacity(REPETITIONS * 3);
     let mut all_decommitments = Vec::with_capacity(REPETITIONS * 3);
@@ -404,16 +403,20 @@ fn verify_repetition(
     decommitments: &[Decommitment],
     views: &[View],
 ) -> bool {
+    dbg!(());
+    println!("{:#X?}", (outputs, views));
     // Check that the output is correct
     let mut actual_output = outputs[0].clone();
     actual_output.xor(&outputs[1]);
     actual_output.xor(&outputs[2]);
 
     if actual_output != *output {
+        dbg!(actual_output, output);
         return false;
     }
     // Check input lengths
     if !(0..2).all(|i| views[i].input.len() == program.input_count) {
+        dbg!("bad input lengths");
         return false;
     }
 
@@ -433,6 +436,7 @@ fn verify_repetition(
         let i_j = i[j];
         commitment::decommit(&views[j], &commitments[i_j], decommitments[j])
     }) {
+        dbg!("bad commitments");
         return false;
     }
 
@@ -447,11 +451,13 @@ fn verify_repetition(
         Some(x) => x,
         None => return false,
     };
+    dbg!("simulation returned a result");
 
     if re_simulation.primary_messages != views[0].messages {
         return false;
     }
-
+    dbg!("primary messages correct");
+    dbg!(&re_simulation.outputs, &outputs);
     (0..2).all(|j| re_simulation.outputs[j] == outputs[i[j]])
 }
 
@@ -469,6 +475,7 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
     if proof.views.len() != 2 * REPETITIONS {
         return false;
     }
+    dbg!("472");
 
     let mut bit_rng = challenge(program, output, &proof.commitments, &proof.outputs);
 
@@ -508,7 +515,7 @@ pub fn prove<R: RngCore + CryptoRng>(
     }
     input_buf.resize(program.input_count);
     output_buf.resize(program.output_count);
-    dbg!(&input_buf, &output_buf);
+    println!("{:#X?}", (&input_buf, &output_buf));
     Ok(do_prove(rng, program, &input_buf, &output_buf))
 }
 
