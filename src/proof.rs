@@ -123,7 +123,7 @@ impl TriSimulator {
         let seeds = [(); 3].map(|_| Seed::random(rng));
         let rngs = [0, 1, 2].map(|i| BitPRNG::seeded(&seeds[i]));
         let inputs = split(rng, input);
-        let machines = inputs.map(|input| Machine::new(input));
+        let machines = inputs.map(Machine::new);
         let messages = [(); 3].map(|_| BitBuf::new());
         Self {
             seeds,
@@ -217,7 +217,7 @@ pub struct Proof {
     views: Vec<View>,
 }
 
-const CHALLENGE_CONTEXT: &'static str = "boo-hoo v0.1.0 challenge context";
+const CHALLENGE_CONTEXT: &str = "boo-hoo v0.1.0 challenge context";
 
 /// Our challenge is a series of trits, which we draw from a PRNG.
 fn challenge(
@@ -312,7 +312,7 @@ impl<'a> ReSimulator<'a> {
             primary_messages: BitBuf::new(),
             secondary_messages,
             secondary_messages_i: 0,
-            rngs: seeds.map(|seed| BitPRNG::seeded(seed)),
+            rngs: seeds.map(BitPRNG::seeded),
             machines: inputs.map(|input| Machine::new(input.clone())),
         }
     }

@@ -28,7 +28,7 @@ const BUF_LEN: usize = 64;
 ///
 /// This provides some level of domain seperation for the random bytes we
 /// generate from a seed.
-const PRNG_CONTEXT: &'static [u8] = b"boo-hoo v0.1.0 PRNG context";
+const PRNG_CONTEXT: &[u8] = b"boo-hoo v0.1.0 PRNG context";
 
 /// A Pseudo-Random generator of bits.
 ///
