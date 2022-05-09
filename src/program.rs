@@ -16,6 +16,8 @@ pub enum Operation {
     PushArg(u32),
     /// Push a local element, indexed from the bottom of the stack
     PushLocal(u32),
+    /// Pop an element, moving it to the output
+    PopOutput,
 }
 
 impl Encode for Operation {
@@ -32,6 +34,7 @@ impl Encode for Operation {
                 4u8.encode(encoder)?;
                 index.encode(encoder)
             }
+            Operation::PopOutput => 5u8.encode(encoder),
         }
     }
 }
@@ -87,6 +90,7 @@ impl Program {
     /// without redoing the logic.
     pub fn validate(self) -> Result<ValidatedProgram, ProgramError> {
         let mut required_input: u32 = 0;
+        let mut output_count: usize = 0;
         let mut stack: usize = 0;
 
         for (instruction, op) in self.operations.iter().enumerate() {
@@ -114,12 +118,19 @@ impl Program {
                     }
                     stack += 1;
                 }
+                Operation::PopOutput => {
+                    if stack < 1 {
+                        return Err(ProgramError::InsufficientStack { instruction, stack });
+                    }
+                    stack -= 1;
+                    output_count += 1;
+                }
             }
         }
 
         Ok(ValidatedProgram {
             input_count: required_input as usize,
-            output_count: stack,
+            output_count,
             operations: self.operations,
         })
     }
@@ -165,25 +176,25 @@ mod test {
     fn test_validating_program_counts_correctly() {
         assert_eq!(
             Ok((2, 2)),
-            Program::new([PushArg(0), PushArg(1), Not])
+            Program::new([PushArg(0), PushArg(1), Not, PopOutput, PopOutput])
                 .validate()
                 .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 2)),
-            Program::new([PushArg(0), PushArg(0), Not])
+            Program::new([PushArg(0), PushArg(0), Not, PopOutput, PopOutput])
                 .validate()
                 .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 1)),
-            Program::new([PushArg(0), PushArg(0), Xor])
+            Program::new([PushArg(0), PushArg(0), Xor, PopOutput])
                 .validate()
                 .map(|x| x.io())
         );
         assert_eq!(
             Ok((1, 1)),
-            Program::new([PushArg(0), PushArg(0), And])
+            Program::new([PushArg(0), PushArg(0), And, PopOutput])
                 .validate()
                 .map(|x| x.io())
         );

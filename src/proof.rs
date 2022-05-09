@@ -47,6 +47,7 @@ fn and(input_a: (Bit, Bit), input_b: (Bit, Bit), mask_a: Bit, mask_b: Bit) -> Bi
 struct Machine {
     input: BitBuf,
     stack: BitBuf,
+    output: BitBuf,
 }
 
 impl Machine {
@@ -54,6 +55,7 @@ impl Machine {
         Self {
             input,
             stack: BitBuf::new(),
+            output: BitBuf::new(),
         }
     }
 
@@ -94,6 +96,12 @@ impl Machine {
         // Safe, once again, because of program validation
         let local = self.stack.get(i).unwrap();
         self.push(local);
+    }
+
+    /// Pop a top bit and move it to the output buffer.
+    fn pop_output(&mut self) {
+        let pop = self.pop();
+        self.output.push(pop)
     }
 }
 
@@ -179,6 +187,11 @@ impl TriSimulator {
                     machine.push_local(i_usize);
                 }
             }
+            Operation::PopOutput => {
+                for machine in &mut self.machines {
+                    machine.pop_output();
+                }
+            }
         }
     }
 
@@ -202,7 +215,7 @@ impl TriSimulator {
                 input: machine.input,
                 messages,
             });
-            outputs.push(machine.stack);
+            outputs.push(machine.output);
         }
         let views = views.try_into().unwrap();
         let outputs = outputs.try_into().unwrap();
@@ -364,6 +377,11 @@ impl<'a> ReSimulator<'a> {
                     machine.push_local(i as usize)
                 }
             }
+            Operation::PopOutput => {
+                for machine in &mut self.machines {
+                    machine.pop_output();
+                }
+            }
         }
         Some(())
     }
@@ -378,7 +396,7 @@ impl<'a> ReSimulator<'a> {
         }
 
         let primary_messages = self.primary_messages;
-        let outputs = self.machines.map(|machine| machine.stack);
+        let outputs = self.machines.map(|machine| machine.output);
         Some(ReSimulation {
             primary_messages,
             outputs,
@@ -542,6 +560,7 @@ mod test {
             Xor,
             Xor,
             And,
+            PopOutput
         ])
         .validate()
         .unwrap()
