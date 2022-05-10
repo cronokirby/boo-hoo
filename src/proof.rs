@@ -59,11 +59,13 @@ struct View {
     messages: BitBuf,
 }
 
+/// The result of running the simulation on three parties.
 struct TriSimulation {
     views: [View; 3],
     outputs: [BitBuf; 3],
 }
 
+/// A simulator running the MPC protocol over three virtual parties.
 struct TriSimulator {
     seeds: [Seed; 3],
     rngs: [BitPRNG; 3],
@@ -287,20 +289,32 @@ fn do_prove<R: RngCore + CryptoRng>(
     }
 }
 
+/// Represents the partial simulation over the two revealed parties of the protocol.
 struct ReSimulation {
     primary_messages: BitBuf,
     outputs: [BitBuf; 2],
 }
 
+/// The ReSimulator partially simulates the MPC protocol over only two parties.
+/// 
+/// Since we have only two parties, we can't do a full simulation. Instead, we trust
+/// the claimed messages for the second party, and re-simulate the behavior of the first
+/// party given those messages.
 struct ReSimulator<'a> {
+    /// The new messages reproduced for the first party.
     primary_messages: BitBuf,
+    /// The claimed messages for the second party.
     secondary_messages: &'a BitBuf,
+    /// The current index into those messages.
     secondary_messages_i: usize,
+    /// The RNGs for each party.
     rngs: [BitPRNG; 2],
+    /// The machine for the state of each party.
     machines: [Machine; 2],
 }
 
 impl<'a> ReSimulator<'a> {
+    /// Create a new ReSimulator given the inputs, seeds, and the messages of the second party.
     fn new(inputs: [&'a BitBuf; 2], seeds: [&'a Seed; 2], secondary_messages: &'a BitBuf) -> Self {
         Self {
             primary_messages: BitBuf::new(),
