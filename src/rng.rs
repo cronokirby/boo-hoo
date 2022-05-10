@@ -2,6 +2,7 @@ use bincode::{Decode, Encode};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::bits::Bit;
+use crate::constants::PRNG_CONTEXT;
 
 /// The number of bytes in an RNG seed
 const SEED_LEN: usize = blake3::KEY_LEN;
@@ -23,12 +24,6 @@ impl Seed {
 ///
 /// Using 64 is a good match with the XOF output from BLAKE3.
 const BUF_LEN: usize = 64;
-
-/// The context string used for our PRNG.
-///
-/// This provides some level of domain seperation for the random bytes we
-/// generate from a seed.
-const PRNG_CONTEXT: &str = concat!("boo-hoo ", env!("CARGO_PKG_VERSION", "v?"), "PRNG context");
 
 /// A Pseudo-Random generator of bits.
 ///

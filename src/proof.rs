@@ -2,7 +2,7 @@ use crate::bits::*;
 use crate::commitment;
 use crate::commitment::Commitment;
 use crate::commitment::Decommitment;
-use crate::constants::REPETITIONS;
+use crate::constants::{CHALLENGE_CONTEXT, REPETITIONS};
 use crate::program::*;
 use crate::rng::{BitPRNG, Seed};
 use bincode::Decode;
@@ -167,12 +167,6 @@ pub struct Proof {
     decommitments: Vec<Decommitment>,
     views: Vec<View>,
 }
-
-const CHALLENGE_CONTEXT: &str = concat!(
-    "boo-hoo ",
-    env!("CARGO_PKG_VERSION", "v?"),
-    "challenge context"
-);
 
 /// Our challenge is a series of trits, which we draw from a PRNG.
 fn challenge(
@@ -507,18 +501,18 @@ mod test {
         .unwrap()
     }
 
-    const TEST_CTX: &str = concat!("boo-hoo ", env!("CARGO_PKG_VERSION", "v?"), "test context");
+    const TEST_CTX: &[u8] = b"test context";
 
     #[test]
     fn test_simple_program_proof_succeeds() {
         let input = &[0b0111_1110];
         let output = &[1];
         let program = simple_program();
-        let proof = prove(&mut OsRng, TEST_CTX.as_bytes(), &program, input, output);
+        let proof = prove(&mut OsRng, TEST_CTX, &program, input, output);
         assert!(proof.is_ok());
         assert_eq!(
             Ok(true),
-            verify(TEST_CTX.as_bytes(), &program, output, &proof.unwrap())
+            verify(TEST_CTX, &program, output, &proof.unwrap())
         );
     }
 
@@ -527,9 +521,9 @@ mod test {
         #[test]
         #[ignore]
         fn test_program_proofs_succeed((program, input, output) in arb_program_and_inputs()) {
-            let proof = prove(&mut OsRng, TEST_CTX.as_bytes(), &program, &input, &[output]);
+            let proof = prove(&mut OsRng, TEST_CTX, &program, &input, &[output]);
             assert!(proof.is_ok());
-            assert_eq!(Ok(true), verify(TEST_CTX.as_bytes(), &program, &[output], &proof.unwrap()));
+            assert_eq!(Ok(true), verify(TEST_CTX, &program, &[output], &proof.unwrap()));
         }
     }
 }
