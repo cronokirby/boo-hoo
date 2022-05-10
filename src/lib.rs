@@ -43,7 +43,7 @@
 //! ```
 
 //! The validate method produces a `ValidatedProgram`, which has been validated against
-//! obviously incorrect program, and which knows exactly how many input and output
+//! obviously incorrect manipulations, and which knows exactly how many input and output
 //! bits the program uses. In our case, the program has two input bits, and two output bits.
 
 //! Now, we can generate a proof for this program, using our secret inputs:
