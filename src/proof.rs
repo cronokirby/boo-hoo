@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::Read;
 use std::io::Write;
 
@@ -203,7 +204,7 @@ impl Proof {
     }
 
     /// Decode this proof from an arbitrary object implementing `Read`.
-    /// 
+    ///
     /// Note that this function will also work with `&[u8]`, since that implements `Read`.
     pub fn decode_from_read<R: Read>(src: &mut R) -> Result<Self, DecodeError> {
         decode_from_std_read(src, config::standard())
@@ -469,11 +470,27 @@ fn do_verify(ctx: &[u8], program: &ValidatedProgram, output: &BitBuf, proof: &Pr
     })
 }
 
+/// Represents an error that can happen when proving or verifying.
+///
+/// At the moment, errors only happen because the size of the input or the output
+/// was insufficient for what the program expected. If too little input our output
+/// is provided, then proving and verifying will fail.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     InsufficientInput(usize),
     InsufficientOutput(usize),
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InsufficientInput(i) => write!(f, "insufficient input of size {}", i),
+            Error::InsufficientOutput(i) => write!(f, "insufficient output of size {}", i),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
