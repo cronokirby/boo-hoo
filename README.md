@@ -23,7 +23,7 @@ two secret bits `x0` and `x1` such that `x0 & x1 == 1`. First, you'll need to
 create a program which represents this circuit:
 
 ```rust
-use boo_hoo::program::*;
+use boo_hoo::*;
 use Operation::*;
 
 let raw_program = Program::new([
@@ -55,7 +55,6 @@ bits the program uses. In our case, the program has two input bits, and two outp
 Now, we can generate a proof for this program, using our secret inputs:
 
 ```rust
-use boo_hoo::proof::*;
 use rand_core::OsRng;
 
 let ctx = b"example context";
