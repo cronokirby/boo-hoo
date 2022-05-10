@@ -159,6 +159,77 @@ impl ValidatedProgram {
     }
 }
 
+/// Represents a stack machine capable of interpreting our bytecode.
+///
+/// This is useful in simulating programs for testing purposes, but also for doing
+/// simulation of individual parties inside of our proving system as well.
+#[derive(Clone, Debug)]
+pub(crate) struct Machine {
+    input: BitBuf,
+    stack: BitBuf,
+    output: BitBuf,
+}
+
+impl Machine {
+    /// Create a new machine with a given input buffer.
+    pub fn new(input: BitBuf) -> Self {
+        Self {
+            input,
+            stack: BitBuf::new(),
+            output: BitBuf::new(),
+        }
+    }
+
+    /// Pop a bit off the stack.
+    ///
+    /// This is UB of the stack is empty. This is why validating the program
+    /// being run is important.
+    pub fn pop(&mut self) -> Bit {
+        self.stack.pop().unwrap()
+    }
+
+    /// Push a bit onto the stack.
+    pub fn push(&mut self, bit: Bit) {
+        self.stack.push(bit);
+    }
+
+    /// Negate the top bit on the stack.
+    pub fn not(&mut self) {
+        let top = self.pop();
+        self.push(!top);
+    }
+
+    /// xor the top two bits off the stack.
+    pub fn xor(&mut self) {
+        let a = self.pop();
+        let b = self.pop();
+        self.push(a ^ b);
+    }
+
+    /// Push a bit of the input onto the stack.
+    pub fn push_arg(&mut self, i: usize) {
+        let arg = self.input.get(i).unwrap();
+        self.push(arg);
+    }
+
+    /// Push a bit from the stack back onto the stack.
+    pub fn push_local(&mut self, i: usize) {
+        let local = self.stack.get(i).unwrap();
+        self.push(local);
+    }
+
+    /// Pop a top bit and move it to the output buffer.
+    pub fn pop_output(&mut self) {
+        let pop = self.pop();
+        self.output.push(pop)
+    }
+
+    /// Consume this machine, returning the input and output buffers.
+    pub fn input_output(self) -> (BitBuf, BitBuf) {
+        (self.input, self.output)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
