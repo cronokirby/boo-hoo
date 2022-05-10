@@ -492,25 +492,26 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Create a proof that running a program on an input produces the provided output. 
-/// 
+/// Create a proof that running a program on an input produces the provided output.
+///
 /// This proof will let other people independently verify that we know an input producing
 /// that output after running the program, without revealing what that secret input is.
-/// 
+///
 /// This proof also commits to the program. A proof will only verify with the exact
 /// program used to create the proof. Any modification to the program, even if it
 /// results in equivalent functionality, will fail to verify.
-/// 
+///
 /// This proving function takes an additional context, which can be used to bind
 /// the proof to a given context. The verifier will need to pass in the same context,
 /// and will fail to verify if their context is different. Among other things,
 /// this allows you to potentially turn these proofs into a signature scheme, by using
 /// a message as a context.
-/// 
+///
 /// The program needs to be validated, to make sure that it isn't malformed. Furthermore,
 /// this proving can fail if the input or output doesn't match the size of the proof.
 /// Providing additional input or output will work, and any extra data beyond the number
-/// of bits used by the program is ignored completely.
+/// of bits used by the program is ignored completely. Bits are read from least to
+/// most significant.
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
     ctx: &[u8],
@@ -531,6 +532,18 @@ pub fn prove<R: RngCore + CryptoRng>(
     Ok(do_prove(rng, ctx, program, &input_buf, &output_buf))
 }
 
+/// Verify a proof, demonstrating knowledge of some input for which the program returns this output.
+///
+/// This function returns `true` if the proof is correct.
+///
+/// For the proof to successfully verify, the prover needs to have known an input which
+/// produces this exact output when used to run the program. Furthermore, the program
+/// needs to exactly match the program used to create the proof. Finally, the context
+/// data used to produce the proof needs to be the exact same as passed to verify.
+///
+/// Note that the output needs to be at least as long as the output produced by the program.
+/// Any additional bits in the output will be ignored. Bits are read from least significant
+/// to most significant. If the output isn't large enough, this function will fail.
 pub fn verify(
     ctx: &[u8],
     program: &ValidatedProgram,
