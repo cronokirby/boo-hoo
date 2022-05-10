@@ -1,4 +1,4 @@
-# boo-hoo
+# boo-hoo [![](https://img.shields.io/crates/v/boo-hoo.svg)](https://crates.io/crates/boo-hoo) [![](https://img.shields.io/badge/dynamic/json.svg?label=docs&uri=https%3A%2F%2Fcrates.io%2Fapi%2Fv1%2Fcrates%2Fboo-hoo%2Fversions&query=%24.versions%5B0%5D.num&colorB=4F74A6)](https://docs.rs/boo-hoo)
 
 A library for Non-Interactive Zero-Knowledge Proofs of Knowledge (NIZKPoKs) for
 boolean circuits.
