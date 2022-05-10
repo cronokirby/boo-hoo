@@ -1,3 +1,6 @@
+use std::io::Read;
+use std::io::Write;
+
 use crate::bits::*;
 use crate::commitment;
 use crate::commitment::Commitment;
@@ -5,6 +8,11 @@ use crate::commitment::Decommitment;
 use crate::constants::{CHALLENGE_CONTEXT, REPETITIONS};
 use crate::program::*;
 use crate::rng::{BitPRNG, Seed};
+use bincode::decode_from_std_read;
+use bincode::encode_into_slice;
+use bincode::encode_to_vec;
+use bincode::error::DecodeError;
+use bincode::error::EncodeError;
 use bincode::Decode;
 use bincode::Encode;
 use bincode::{config, encode_into_std_write};
@@ -161,11 +169,45 @@ impl TriSimulator {
     }
 }
 
+/// Represents a proof of knowledge of a pre-image of some arbitrary program.
+///
+/// This is generated through the `prove` function, and should be treated as
+/// an opaque blob which can be verified through the `verify` function.
+///
+/// For serialization and deserialization, the Encode and Decode traits are provided,
+/// which can be combined with [bincode](https://docs.rs/bincode/2.0.0-rc.1/bincode/index.html)
+/// in order to serialize to bytes, or an arbitrary IO object.
+///
+/// This object also provides wrapper methods to implement those functions.
+#[derive(Clone, Encode, Decode)]
 pub struct Proof {
     commitments: Vec<Commitment>,
     outputs: Vec<BitBuf>,
     decommitments: Vec<Decommitment>,
     views: Vec<View>,
+}
+
+impl Proof {
+    /// Encode this proof into a vector of bytes.
+    ///
+    /// In principle, this method shouldn't fail.
+    pub fn encode_to_vec(&self) -> Result<Vec<u8>, EncodeError> {
+        encode_to_vec(self, config::standard())
+    }
+
+    /// Encode this proof into an arbitrary object implementing `Write`.
+    ///
+    /// This will return the number of bytes written.
+    pub fn encode_to_write<W: Write>(&self, dst: &mut W) -> Result<usize, EncodeError> {
+        encode_into_std_write(self, dst, config::standard())
+    }
+
+    /// Decode this proof from an arbitrary object implementing `Read`.
+    /// 
+    /// Note that this function will also work with `&[u8]`, since that implements `Read`.
+    pub fn decode_from_read<R: Read>(src: &mut R) -> Result<Self, DecodeError> {
+        decode_from_std_read(src, config::standard())
+    }
 }
 
 /// Our challenge is a series of trits, which we draw from a PRNG.
