@@ -172,6 +172,7 @@ const CHALLENGE_CONTEXT: &str = "boo-hoo v0.1.0 challenge context";
 
 /// Our challenge is a series of trits, which we draw from a PRNG.
 fn challenge(
+    ctx: &[u8],
     program: &ValidatedProgram,
     output: &BitBuf,
     commitments: &Vec<Commitment>,
@@ -182,6 +183,7 @@ fn challenge(
     }
 
     let mut hasher = blake3::Hasher::new_derive_key(CHALLENGE_CONTEXT);
+    update(&mut hasher, ctx);
     update(&mut hasher, &program.operations);
     update(&mut hasher, output);
     update(&mut hasher, REPETITIONS);
@@ -196,6 +198,7 @@ fn challenge(
 /// The buffers for input and output must have the exact right length for the program.
 fn do_prove<R: RngCore + CryptoRng>(
     rng: &mut R,
+    ctx: &[u8],
     program: &ValidatedProgram,
     input: &BitBuf,
     output: &BitBuf,
@@ -220,7 +223,7 @@ fn do_prove<R: RngCore + CryptoRng>(
         }
     }
 
-    let mut bit_rng = challenge(program, output, &commitments, &outputs);
+    let mut bit_rng = challenge(ctx, program, output, &commitments, &outputs);
 
     let mut decommitments = Vec::with_capacity(REPETITIONS * 2);
     let mut views = Vec::with_capacity(REPETITIONS * 2);
@@ -395,7 +398,7 @@ fn verify_repetition(
     (0..2).all(|j| re_simulation.outputs[j] == outputs[i[j]])
 }
 
-fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool {
+fn do_verify(ctx: &[u8], program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool {
     // Check that the proof has enough content
     if proof.commitments.len() != 3 * REPETITIONS {
         return false;
@@ -410,7 +413,7 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
         return false;
     }
 
-    let mut bit_rng = challenge(program, output, &proof.commitments, &proof.outputs);
+    let mut bit_rng = challenge(ctx, program, output, &proof.commitments, &proof.outputs);
 
     (0..REPETITIONS).all(|i| {
         let trit = bit_rng.next_trit();
@@ -434,6 +437,7 @@ pub enum Error {
 
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
+    ctx: &[u8],
     program: &ValidatedProgram,
     input: &[u8],
     output: &[u8],
@@ -448,17 +452,17 @@ pub fn prove<R: RngCore + CryptoRng>(
     }
     input_buf.resize(program.input_count);
     output_buf.resize(program.output_count);
-    Ok(do_prove(rng, program, &input_buf, &output_buf))
+    Ok(do_prove(rng, ctx, program, &input_buf, &output_buf))
 }
 
-pub fn verify(program: &ValidatedProgram, output: &[u8], proof: &Proof) -> Result<bool, Error> {
+pub fn verify(ctx: &[u8], program: &ValidatedProgram, output: &[u8], proof: &Proof) -> Result<bool, Error> {
     let mut output_buf = BitBuf::from_bytes(output);
     if output_buf.len() < program.output_count {
         return Err(Error::InsufficientOutput(output_buf.len()));
     }
     output_buf.resize(program.output_count);
 
-    Ok(do_verify(program, &output_buf, proof))
+    Ok(do_verify(ctx, program, &output_buf, proof))
 }
 
 #[cfg(test)]
@@ -494,14 +498,16 @@ mod test {
         .unwrap()
     }
 
+    const TEST_CTX: &[u8] = b"boo-hoo v0.1.0 Test Context";
+
     #[test]
     fn test_simple_program_proof_succeeds() {
         let input = &[0b0111_1110];
         let output = &[1];
         let program = simple_program();
-        let proof = prove(&mut OsRng, &program, input, output);
+        let proof = prove(&mut OsRng, TEST_CTX, &program, input, output);
         assert!(proof.is_ok());
-        assert_eq!(Ok(true), verify(&program, output, &proof.unwrap()));
+        assert_eq!(Ok(true), verify(TEST_CTX, &program, output, &proof.unwrap()));
     }
 
     proptest! {
@@ -509,9 +515,9 @@ mod test {
         #[test]
         #[ignore]
         fn test_program_proofs_succeed((program, input, output) in arb_program_and_inputs()) {
-            let proof = prove(&mut OsRng, &program, &input, &[output]);
+            let proof = prove(&mut OsRng, TEST_CTX, &program, &input, &[output]);
             assert!(proof.is_ok());
-            assert_eq!(Ok(true), verify(&program, &[output], &proof.unwrap()));
+            assert_eq!(Ok(true), verify(TEST_CTX, &program, &[output], &proof.unwrap()));
         }
     }
 }
