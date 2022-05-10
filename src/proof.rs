@@ -168,7 +168,11 @@ pub struct Proof {
     views: Vec<View>,
 }
 
-const CHALLENGE_CONTEXT: &str = "boo-hoo v0.1.0 challenge context";
+const CHALLENGE_CONTEXT: &str = concat!(
+    "boo-hoo ",
+    env!("CARGO_PKG_VERSION", "v?"),
+    "challenge context"
+);
 
 /// Our challenge is a series of trits, which we draw from a PRNG.
 fn challenge(
@@ -455,7 +459,12 @@ pub fn prove<R: RngCore + CryptoRng>(
     Ok(do_prove(rng, ctx, program, &input_buf, &output_buf))
 }
 
-pub fn verify(ctx: &[u8], program: &ValidatedProgram, output: &[u8], proof: &Proof) -> Result<bool, Error> {
+pub fn verify(
+    ctx: &[u8],
+    program: &ValidatedProgram,
+    output: &[u8],
+    proof: &Proof,
+) -> Result<bool, Error> {
     let mut output_buf = BitBuf::from_bytes(output);
     if output_buf.len() < program.output_count {
         return Err(Error::InsufficientOutput(output_buf.len()));
@@ -498,16 +507,19 @@ mod test {
         .unwrap()
     }
 
-    const TEST_CTX: &[u8] = b"boo-hoo v0.1.0 Test Context";
+    const TEST_CTX: &str = concat!("boo-hoo ", env!("CARGO_PKG_VERSION", "v?"), "test context");
 
     #[test]
     fn test_simple_program_proof_succeeds() {
         let input = &[0b0111_1110];
         let output = &[1];
         let program = simple_program();
-        let proof = prove(&mut OsRng, TEST_CTX, &program, input, output);
+        let proof = prove(&mut OsRng, TEST_CTX.as_bytes(), &program, input, output);
         assert!(proof.is_ok());
-        assert_eq!(Ok(true), verify(TEST_CTX, &program, output, &proof.unwrap()));
+        assert_eq!(
+            Ok(true),
+            verify(TEST_CTX.as_bytes(), &program, output, &proof.unwrap())
+        );
     }
 
     proptest! {
@@ -515,9 +527,9 @@ mod test {
         #[test]
         #[ignore]
         fn test_program_proofs_succeed((program, input, output) in arb_program_and_inputs()) {
-            let proof = prove(&mut OsRng, TEST_CTX, &program, &input, &[output]);
+            let proof = prove(&mut OsRng, TEST_CTX.as_bytes(), &program, &input, &[output]);
             assert!(proof.is_ok());
-            assert_eq!(Ok(true), verify(TEST_CTX, &program, &[output], &proof.unwrap()));
+            assert_eq!(Ok(true), verify(TEST_CTX.as_bytes(), &program, &[output], &proof.unwrap()));
         }
     }
 }

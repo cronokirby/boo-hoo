@@ -28,7 +28,7 @@ const BUF_LEN: usize = 64;
 ///
 /// This provides some level of domain seperation for the random bytes we
 /// generate from a seed.
-const PRNG_CONTEXT: &[u8] = b"boo-hoo v0.1.0 PRNG context";
+const PRNG_CONTEXT: &str = concat!("boo-hoo ", env!("CARGO_PKG_VERSION", "v?"), "PRNG context");
 
 /// A Pseudo-Random generator of bits.
 ///
@@ -60,7 +60,7 @@ impl BitPRNG {
     pub fn seeded(seed: &Seed) -> Self {
         // We extend the seed to an arbitrary stream of bits, with some domain separation.
         let mut hasher = blake3::Hasher::new_keyed(&seed.0);
-        hasher.update(PRNG_CONTEXT);
+        hasher.update(PRNG_CONTEXT.as_bytes());
         Self::from_hasher(hasher)
     }
 
