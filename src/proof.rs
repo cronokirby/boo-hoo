@@ -230,7 +230,6 @@ fn do_prove<R: RngCore + CryptoRng>(
         let i0 = i + trit;
         let i1 = i + ((trit + 1) % 3);
         for ij in [i0, i1] {
-            println!("ij: {}", ij);
             decommitments.push(std::mem::take(&mut all_decommitments[ij]));
             views.push(std::mem::take(&mut all_views[ij]));
         }
@@ -355,32 +354,26 @@ fn verify_repetition(
     decommitments: &[Decommitment],
     views: &[View],
 ) -> bool {
-    dbg!(());
-    println!("{:#X?}", (outputs, views));
     // Check that the output is correct
     let mut actual_output = outputs[0].clone();
     actual_output.xor(&outputs[1]);
     actual_output.xor(&outputs[2]);
 
     if actual_output != *output {
-        dbg!(actual_output, output);
         return false;
     }
     // Check input lengths
     if !(0..2).all(|i| views[i].input.len() == program.input_count) {
-        dbg!("bad input lengths");
         return false;
     }
 
     let i = [trit as usize, ((trit + 1) % 3) as usize];
-    dbg!(i);
 
     // Check that the commitments are valid
     if !(0..2).all(|j| {
         let i_j = i[j];
         commitment::decommit(&views[j], &commitments[i_j], &decommitments[j])
     }) {
-        dbg!("bad commitments");
         return false;
     }
 
@@ -395,13 +388,10 @@ fn verify_repetition(
         Some(x) => x,
         None => return false,
     };
-    dbg!("simulation returned a result");
 
     if re_simulation.primary_messages != views[0].messages {
         return false;
     }
-    dbg!("primary messages correct");
-    dbg!(&re_simulation.outputs, &outputs);
     (0..2).all(|j| re_simulation.outputs[j] == outputs[i[j]])
 }
 
@@ -419,7 +409,6 @@ fn do_verify(program: &ValidatedProgram, output: &BitBuf, proof: &Proof) -> bool
     if proof.views.len() != 2 * REPETITIONS {
         return false;
     }
-    dbg!("472");
 
     let mut bit_rng = challenge(program, output, &proof.commitments, &proof.outputs);
 
@@ -459,7 +448,6 @@ pub fn prove<R: RngCore + CryptoRng>(
     }
     input_buf.resize(program.input_count);
     output_buf.resize(program.output_count);
-    println!("{:#X?}", (&input_buf, &output_buf));
     Ok(do_prove(rng, program, &input_buf, &output_buf))
 }
 
