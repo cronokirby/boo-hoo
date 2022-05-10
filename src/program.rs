@@ -1,6 +1,8 @@
 use bincode::{enc::Encoder, error::EncodeError, Encode};
 use std::{error, fmt};
 
+use crate::bits::{Bit, BitBuf};
+
 /// Represents an individual operation in the program.
 ///
 /// Each of these manipulates the program stack, potentially reading input.
@@ -206,6 +208,17 @@ impl Machine {
         self.push(a ^ b);
     }
 
+    /// and the top two bits off the stack.
+    ///
+    /// Note that this operation doesn't do the correct thing in the secret sharing
+    /// setting. This is only needed for tests as well
+    #[cfg(test)]
+    pub fn and(&mut self) {
+        let a = self.pop();
+        let b = self.pop();
+        self.push(a & b);
+    }
+
     /// Push a bit of the input onto the stack.
     pub fn push_arg(&mut self, i: usize) {
         let arg = self.input.get(i).unwrap();
@@ -227,6 +240,71 @@ impl Machine {
     /// Consume this machine, returning the input and output buffers.
     pub fn input_output(self) -> (BitBuf, BitBuf) {
         (self.input, self.output)
+    }
+}
+
+/// A module providing generators for property testing
+#[cfg(test)]
+pub(crate) mod generators {
+    use super::*;
+    use proptest::collection::vec;
+    use proptest::prelude::*;
+
+    fn run_operations(ops: &[Operation], input: &[u8]) -> u8 {
+        let mut machine = Machine::new(BitBuf::from_bytes(input));
+        for op in ops {
+            match op {
+                Operation::Not => machine.not(),
+                Operation::And => machine.and(),
+                Operation::Xor => machine.xor(),
+                Operation::PushArg(i) => machine.push_arg(*i as usize),
+                Operation::PushLocal(i) => machine.push_local(*i as usize),
+                Operation::PopOutput => machine.pop_output(),
+            }
+        }
+        let (_, mut output) = machine.input_output();
+        let mut out = 0;
+        for _ in 0..8 {
+            out <<= 1;
+            out |= u64::from(output.pop().unwrap()) as u8;
+        }
+        out
+    }
+
+    fn arb_operation_except_pop_output(
+        max_arg: u32,
+        max_local: u32,
+    ) -> impl Strategy<Value = Operation> {
+        use Operation::*;
+
+        prop_oneof![
+            Just(Not),
+            Just(And),
+            Just(Xor),
+            (0..max_arg).prop_map(PushArg),
+            (0..max_local).prop_map(PushLocal),
+        ]
+    }
+
+    // The idea is to have 32 bits of input pushed to the stack, and only do 16
+    // operations, before then popping 8 bits of input. This ensure no stack underflow
+    // can happen, and that we'll have enough output.
+    prop_compose! {
+        pub fn arb_program_and_inputs()(input in any::<[u8; 4]>(), extra in vec(arb_operation_except_pop_output(32, 16), 0..16)) -> (ValidatedProgram, [u8; 4], u8) {
+            use Operation::*;
+
+            let mut operations = Vec::with_capacity(extra.len() + 32 + 8);
+            for i in 0..32 {
+                operations.push(PushArg(i));
+            }
+            operations.extend(extra.iter());
+            for _ in 0..8 {
+                operations.push(PopOutput);
+            }
+
+            let output = run_operations(&operations, &input);
+            (Program::new(operations).validate().unwrap(), input, output)
+        }
     }
 }
 

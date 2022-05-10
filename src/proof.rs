@@ -42,69 +42,6 @@ fn and(input_a: (Bit, Bit), input_b: (Bit, Bit), mask_a: Bit, mask_b: Bit) -> Bi
     (input_a.0 & input_a.1) ^ (input_a.0 & input_b.1) ^ (input_b.0 & input_a.1) ^ mask_a ^ mask_b
 }
 
-/// Represents
-#[derive(Clone, Debug)]
-struct Machine {
-    input: BitBuf,
-    stack: BitBuf,
-    output: BitBuf,
-}
-
-impl Machine {
-    fn new(input: BitBuf) -> Self {
-        Self {
-            input,
-            stack: BitBuf::new(),
-            output: BitBuf::new(),
-        }
-    }
-
-    /// Pop a bit off the stack.
-    ///
-    /// This is UB of the stack is empty. This is why validating the program
-    /// being run is important.
-    fn pop(&mut self) -> Bit {
-        self.stack.pop().unwrap()
-    }
-
-    /// Push a bit onto the stack.
-    fn push(&mut self, bit: Bit) {
-        self.stack.push(bit);
-    }
-
-    /// Negate the top bit on the stack.
-    fn not(&mut self) {
-        let top = self.pop();
-        self.push(!top);
-    }
-
-    /// xor the top two bits off the stack.
-    fn xor(&mut self) {
-        let a = self.pop();
-        let b = self.pop();
-        self.push(a ^ b);
-    }
-
-    /// Push a bit of the input onto the stack.
-    fn push_arg(&mut self, i: usize) {
-        let arg = self.input.get(i).unwrap();
-        self.push(arg);
-    }
-
-    /// Push a bit from the stack back onto the stack.
-    fn push_local(&mut self, i: usize) {
-        // Safe, once again, because of program validation
-        let local = self.stack.get(i).unwrap();
-        self.push(local);
-    }
-
-    /// Pop a top bit and move it to the output buffer.
-    fn pop_output(&mut self) {
-        let pop = self.pop();
-        self.output.push(pop)
-    }
-}
-
 /// Represents the view of a single party in the MPC protocol.
 #[derive(Clone, Default, Debug, Encode, Decode)]
 struct View {
@@ -210,12 +147,13 @@ impl TriSimulator {
             .zip(self.machines.into_iter())
             .zip(self.messages.into_iter())
         {
+            let (input, output) = machine.input_output();
             views.push(View {
                 seed,
-                input: machine.input,
+                input: input,
                 messages,
             });
-            outputs.push(machine.output);
+            outputs.push(output);
         }
         let views = views.try_into().unwrap();
         let outputs = outputs.try_into().unwrap();
@@ -396,7 +334,7 @@ impl<'a> ReSimulator<'a> {
         }
 
         let primary_messages = self.primary_messages;
-        let outputs = self.machines.map(|machine| machine.output);
+        let outputs = self.machines.map(|machine| machine.input_output().1);
         Some(ReSimulation {
             primary_messages,
             outputs,
@@ -540,6 +478,8 @@ mod test {
     use rand_core::OsRng;
 
     use super::*;
+    use crate::program::generators::arb_program_and_inputs;
+    use proptest::prelude::*;
 
     fn simple_program() -> ValidatedProgram {
         use Operation::*;
@@ -560,7 +500,7 @@ mod test {
             Xor,
             Xor,
             And,
-            PopOutput
+            PopOutput,
         ])
         .validate()
         .unwrap()
@@ -574,5 +514,16 @@ mod test {
         let proof = prove(&mut OsRng, &program, input, output);
         assert!(proof.is_ok());
         assert_eq!(Ok(true), verify(&program, output, &proof.unwrap()));
+    }
+
+    proptest! {
+        // This test is slow, so should be run with --include-ignore
+        #[test]
+        #[ignore]
+        fn test_program_proofs_succeed((program, input, output) in arb_program_and_inputs()) {
+            let proof = prove(&mut OsRng, &program, &input, &[output]);
+            assert!(proof.is_ok());
+            assert_eq!(Ok(true), verify(&program, &[output], &proof.unwrap()));
+        }
     }
 }
