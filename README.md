@@ -3,6 +3,8 @@
 A library for Non-Interactive Zero-Knowledge Proofs of Knowledge (NIZKPoKs) for
 boolean circuits.
 
+**This library is experimental Cryptographic Software: use at your own peril.**
+
 <p align="center">
     <img src="./boo.png" width="40%">
 </p>

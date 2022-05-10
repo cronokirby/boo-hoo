@@ -1,5 +1,7 @@
 //! A library for Non-Interactive Zero-Knowledge Proofs of Knowledge (NIZKPoKs) for
 //! boolean circuits.
+//! 
+//! **This library is experimental Cryptographic Software: use at your own peril.**
 //!
 //! The idea is that given a program `P` and some secret input `I` you can provide
 //! a proof that you know some input `I` such that the output `O` is equal to `P(I)`.
