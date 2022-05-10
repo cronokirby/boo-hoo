@@ -492,6 +492,25 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Create a proof that running a program on an input produces the provided output. 
+/// 
+/// This proof will let other people independently verify that we know an input producing
+/// that output after running the program, without revealing what that secret input is.
+/// 
+/// This proof also commits to the program. A proof will only verify with the exact
+/// program used to create the proof. Any modification to the program, even if it
+/// results in equivalent functionality, will fail to verify.
+/// 
+/// This proving function takes an additional context, which can be used to bind
+/// the proof to a given context. The verifier will need to pass in the same context,
+/// and will fail to verify if their context is different. Among other things,
+/// this allows you to potentially turn these proofs into a signature scheme, by using
+/// a message as a context.
+/// 
+/// The program needs to be validated, to make sure that it isn't malformed. Furthermore,
+/// this proving can fail if the input or output doesn't match the size of the proof.
+/// Providing additional input or output will work, and any extra data beyond the number
+/// of bits used by the program is ignored completely.
 pub fn prove<R: RngCore + CryptoRng>(
     rng: &mut R,
     ctx: &[u8],
